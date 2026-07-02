@@ -13,18 +13,20 @@ global `glw.config.json`. The global layer (dir: `%APPDATA%/glw` on Windows,
 
 ---
 
-## init — `glw init [token] [--global]` (alias `i`)
+## init — `glw init [token] [--global | --local]` (alias `i`)
 
-Creates `glw.config.json` template in cwd (left untouched if it already exists).
-If a token arg is given, writes `GITLAB_TOKEN=<token>` to `.env` in cwd (creates
-or replaces the line) and prints the masked token (first 8 chars + `...`). With
-`--global`, both files go to the global dir instead of cwd. No network. Does NOT
-require a configured project.
+Creates a `glw.config.json` template (left untouched if it already exists).
+If a token arg is given, writes `GITLAB_TOKEN=<token>` to `.env` (creates or
+replaces the line) and prints the masked token (first 8 chars + `...`).
+Target dir follows the global mode: when `glw global on` is active, init writes
+to the global dir; otherwise to cwd. `--global`/`--local` force the target
+explicitly. No network. Does NOT require a configured project.
 
 ```bash
-glw init                             # create config template only
-glw init glpat-xxxxxxxxxxxx          # also write token to .env
-glw init glpat-xxxxxxxxxxxx --global # set up the shared global environment
+glw init                             # config template (cwd, or global dir if mode is on)
+glw init glpat-xxxxxxxxxxxx          # also write token to .env (same target rule)
+glw init glpat-xxxxxxxxxxxx --global # force the shared global environment
+glw init --local                     # force cwd even when global mode is on
 ```
 
 ---

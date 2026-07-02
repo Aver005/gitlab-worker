@@ -225,6 +225,7 @@ async function cmdInit(args: string[]): Promise<void> {
     args,
     options: {
       global: { type: "boolean", short: "g" },
+      local: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
@@ -233,24 +234,34 @@ async function cmdInit(args: string[]): Promise<void> {
 
   if (values["help"]) {
     console.log(`
-glw init [token] [--global]
+glw init [token] [--global | --local]
 
-Create a glw.config.json template in the current directory (left untouched
-if it already exists). With a token argument, also write GITLAB_TOKEN=<token>
-to .env (creates the file or replaces the existing line).
-With --global, both files go to the shared global dir (${globalDir()})
-used by "glw global on".
+Create a glw.config.json template (left untouched if it already exists).
+With a token argument, also write GITLAB_TOKEN=<token> to .env (creates the
+file or replaces the existing line).
+
+Target directory:
+  - global mode ON (glw global on) → ${globalDir()}
+  - global mode OFF               → current directory
+  - --global / --local force one or the other explicitly
 
 Examples:
   glw init
   glw init glpat-xxxxxxxxxxxxxxxx
   glw init glpat-xxxxxxxxxxxxxxxx --global
+  glw init --local
 `);
     return;
   }
 
   const token = positionals[0];
-  const targetDir = values["global"] ? globalDir() : process.cwd();
+  // Follow the enabled global mode by default; flags override explicitly
+  const useGlobal = values["global"]
+    ? true
+    : values["local"]
+      ? false
+      : isGlobalMode();
+  const targetDir = useGlobal ? globalDir() : process.cwd();
   const configPath = join(targetDir, "glw.config.json");
 
   try {
