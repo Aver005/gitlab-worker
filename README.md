@@ -1,44 +1,97 @@
-# glw — задачи GitLab, не выходя из терминала
+<div align="center">
 
-`glw` — маленький быстрый CLI для работы с задачами (issues / work items) GitLab. Создавайте задачи из обычных markdown-файлов, меняйте любые поля по номеру задачи, ведите учёт времени и выполняйте массовые операции одной командой — например, «закрыть всё, что висит на мне» или «перевести в In Progress все задачи с `refactor:` в названии».
+# ⚡ glw
 
-Работает через GraphQL API GitLab (в том числе со статусами задач, которых нет в REST). Требуется только [Bun](https://bun.sh) v1.3+ — никаких других зависимостей.
+### Задачи GitLab, не выходя из терминала
 
-## Быстрый старт
+Создавайте задачи из markdown-файлов, редактируйте любые поля одной строкой,<br>
+ведите учёт времени и закрывайте десятки задач разом.
+
+[![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3-f9f1e1?logo=bun&logoColor=f9f1e1&labelColor=14151a)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white&labelColor=14151a)](https://www.typescriptlang.org)
+[![Zero Dependencies](https://img.shields.io/badge/dependencies-0-22c55e?labelColor=14151a)](package.json)
+[![Tests](https://img.shields.io/badge/tests-66%20passed-22c55e?labelColor=14151a)](tests)
+[![GitLab GraphQL](https://img.shields.io/badge/GitLab-GraphQL%20Work%20Items-fc6d26?logo=gitlab&labelColor=14151a)](https://docs.gitlab.com/ee/api/graphql/)
+[![Agent Skill](https://img.shields.io/badge/skills.sh-glw-8b5cf6?labelColor=14151a)](https://skills.sh)
+
+[Быстрый старт](#-быстрый-старт) •
+[Возможности](#-возможности) •
+[Массовые операции](#-массовые-операции) •
+[AI-агенты](#-для-ai-агентов) •
+[Справочник](#-справочник)
+
+</div>
+
+---
+
+```console
+$ glw update --search "refactor:" --status "In progress" --dry-run
+
+Found 4 work item(s):
+
+  #38 [opened] refactor: вынести API-клиент в отдельный модуль (backend) @alice
+  #41 [opened] refactor: упростить конфигурацию окружений (devops) @bob
+  #45 [opened] refactor: убрать дублирование в тестах (tests)
+  #47 [opened] refactor: типизация ответов GraphQL (backend) @alice
+
+$ glw update --search "refactor:" --status "In progress" --yes
+Updated #38 refactor: вынести API-клиент в отдельный модуль
+Updated #41 refactor: упростить конфигурацию окружений
+Updated #45 refactor: убрать дублирование в тестах
+Updated #47 refactor: типизация ответов GraphQL
+```
+
+## ✨ Возможности
+
+| | |
+|---|---|
+| 📝 **Задачи из markdown** | Пишете обычный `.md` с YAML-шапкой — получаете оформленную задачу |
+| 🔧 **Все поля задачи** | Название, описание, статус, исполнитель, метки, вес, даты, время |
+| 🔥 **Массовые операции** | Выборка фильтром → превью → одно подтверждение → готово |
+| ⏱️ **Учёт времени** | `glw estimate 42 2h`, `glw spend 42 1h30m --summary "ревью"` |
+| 🔍 **Умный поиск** | По названию, описанию, датам — фильтры комбинируются |
+| 🌍 **Глобальное окружение** | Один конфиг в `%APPDATA%/glw` — работает из любой папки |
+| ⌨️ **Автодополнение** | bash / zsh / PowerShell, включая пути проектов |
+| 🤖 **Agent Skill в комплекте** | AI-агенты управляют вашим бэклогом по навыку из коробки |
+| 🚀 **Ноль зависимостей** | Bun + TypeScript, нативный fetch — нечему ломаться |
+| 📊 **Статусы Work Items** | GraphQL API: `To do` / `In progress` / `Done` — то, чего нет в REST |
+
+## 🚀 Быстрый старт
 
 ```bash
 # 1. Установить
-bun install
-bun link            # теперь команда glw доступна отовсюду
+bun install && bun link
 
-# 2. Подключить GitLab (токен создаётся в GitLab: Settings → Access Tokens, scope "api")
-glw init glpat-xxxxxxxxxxxxxxxx
+# 2. Подключить GitLab (токен: Settings → Access Tokens, scope "api")
+glw config url https://gitlab.example.com
+glw config token glpat-xxxxxxxxxxxxxxxx
 
-# 3. Указать адрес вашего GitLab в созданном glw.config.json:
-#    { "url": "https://gitlab.example.com", ... }
+# 3. Выбрать проект
+glw projects            # что мне доступно?
+glw use backend-api     # достаточно короткого имени
 
-# 4. Выбрать проект
-glw projects        # посмотреть, какие проекты вам доступны
-glw use backend-api # запомнить выбранный (достаточно короткого имени)
-
-# 5. Проверить, что всё работает
+# 4. Поехали
 glw whoami
 glw list
 ```
 
-Готово — дальше просто пользуетесь.
+<details>
+<summary><b>💡 Хочу один конфиг для всех папок</b></summary>
 
-## Повседневная работа
-
-**Посмотреть задачи:**
+<br>
 
 ```bash
-glw list                          # открытые задачи проекта
-glw list --assignee @me           # только мои
-glw view 42                       # вся информация по задаче #42
+glw global on           # включить глобальный режим
+glw init glpat-xxx      # конфиг и токен лягут в %APPDATA%/glw (~/.config/glw на POSIX)
 ```
 
-**Создать задачу из файла** — пишете обычный markdown, метаданные (опционально) в шапке:
+Теперь `glw` работает из любой директории. Локальные конфиги в папках проектов по-прежнему главнее (как у git: local > global). Подробности — в [справочнике](#-справочник).
+
+</details>
+
+## 📋 Повседневная работа
+
+**Создать задачу из файла:**
 
 ```markdown
 ---
@@ -59,68 +112,74 @@ status: To do
 glw create issue.md
 ```
 
-Если шапки нет — заголовком станет первый `# заголовок` файла. Подойдёт и `.txt`, и `.json`.
+Нет шапки? Заголовком станет первый `# заголовок`. Подойдёт и `.txt`, и `.json`.
 
-**Изменить задачу** — любые поля по номеру:
-
-```bash
-glw update 42 --status "In progress" --assignee @me
-glw update 42 --add-label bug --weight 5
-glw update 42 --due 2026-08-01          # поставить дедлайн
-glw update 42 --due none                # снять дедлайн ("none" очищает поле)
-```
-
-**Прокомментировать и закрыть:**
+**Смотреть, менять, закрывать:**
 
 ```bash
+glw list --assignee @me                        # мои открытые задачи
+glw view 42                                    # всё о задаче #42
+glw update 42 --status "In progress" --weight 5
+glw update 42 --due none                       # "none" очищает поле
 glw comment 42 "Проверено, работает"
 glw close 42 --comment "Реализовано в MR !123"
-glw reopen 42
 ```
 
 **Учёт времени:**
 
 ```bash
-glw estimate 42 2h                       # оценка
-glw spend 42 1h30m --summary "ревью"     # затраченное время
+glw estimate 42 2h
+glw spend 42 1h30m --summary "code review"
 ```
 
-**Найти задачу:**
+**Искать:**
 
 ```bash
-glw search "авторизация"          # ищет в названии и описании
-glw search --name "auth"          # только в названии
-glw search --name auth --state all
+glw search "авторизация"                       # по названию и описанию
+glw s --name auth --state all                  # алиас + только название
 ```
 
-## Массовые операции
+## 🔥 Массовые операции
 
-Самое приятное: можно выбрать задачи фильтром и изменить все разом. Перед изменением `glw` покажет список совпавших задач и спросит подтверждение.
+Выбор фильтром, превью перед изменением, подтверждение — случайно снести полбэклога не выйдет:
 
 ```bash
-# Перевести в In Progress всё, у чего в названии есть "refactor:"
+# Что попадёт под изменение? (ничего не меняет)
+glw update --search "refactor:" --status Done --dry-run
+
+# Перевести все "refactor:" в In Progress
 glw update --search "refactor:" --status "In progress"
 
-# Закрыть все открытые задачи, назначенные на меня
+# Закрыть всё, что назначено на меня
 glw close --filter-assignee @me
 
-# Сначала посмотреть, что попадёт под изменение, ничего не меняя:
-glw update --search "refactor:" --status Done --dry-run
+# Для скриптов и CI — пропустить подтверждение
+glw close --filter-label obsolete --yes
 ```
 
-Для скриптов и автоматизации добавляйте `--yes` — подтверждение будет пропущено. Без TTY (например, в CI) команда без `--yes` безопасно отменится сама.
+Без TTY (CI, скрипты) команда без `--yes` безопасно отменится сама.
 
-## Шпаргалка
+## 🤖 Для AI-агентов
+
+В комплекте — готовый **Agent Skill** ([`skills/glw/`](skills/glw)): Claude Code, Cursor, Codex и другие агенты управляют вашим бэклогом по естественно-языковым запросам — «закрой все мои задачи», «поставь 2 часа на #42».
+
+```bash
+npx skills add Aver005/gitlab-worker
+```
+
+Навык учит агента проверять окружение, безопасно выполнять массовые операции (превью → подтверждение) и разбирать ошибки. Технические детали для разработки — в [CLAUDE.md](CLAUDE.md).
+
+## 📖 Шпаргалка
 
 | Команда | Алиас | Что делает |
-|---|---|---|
-| `glw init [token]` | `i` | Создать конфиг; с токеном — записать его в `.env`; `--global` — в `%APPDATA%/glw` |
+|---|:---:|---|
+| `glw init [token]` | `i` | Создать конфиг; с токеном — записать его в `.env` |
 | `glw config [key] [value]` | `cfg` | Показать/изменить настройки (`url`, `project`, `tokenEnv`, `token`) |
 | `glw global on\|off` | | Общее окружение из `%APPDATA%/glw` для всех папок |
 | `glw whoami` | | Кто я (проверка подключения) |
 | `glw projects` | `p` | Мои проекты |
 | `glw use <проект>` | | Выбрать проект по умолчанию |
-| `glw list` | `l`, `ls` | Список задач |
+| `glw list` | `l` `ls` | Список задач |
 | `glw view <iid>` | `v` | Подробности задачи |
 | `glw search <...>` | `s` | Поиск задач по фильтрам |
 | `glw create <файл>` | `cr` | Создать задачу из файла |
@@ -132,49 +191,22 @@ glw update --search "refactor:" --status Done --dry-run
 | `glw spend <iid> <dur>` | | Залогировать время |
 | `glw completion <shell>` | | Скрипт автодополнения |
 
-У каждой команды есть `--help` с полным списком флагов: `glw update --help`.
+У каждой команды есть `--help` с полным списком флагов.
 
----
+## 📚 Справочник
 
-# Справочник
+<details>
+<summary><b>⚙️ Настройка и приоритет параметров</b></summary>
 
-## Настройка
+<br>
 
-### Откуда берутся параметры (по убыванию приоритета)
+Откуда берутся параметры (по убыванию приоритета):
 
 1. Флаг `--project` у конкретной команды
 2. Переменные окружения: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_PROJECT`
 3. Файл `.env` в текущей директории
 4. `glw.config.json` в текущей директории
 5. Глобальные `.env` и `glw.config.json` из `%APPDATA%/glw/` — если включён глобальный режим
-
-### Глобальное окружение — `glw global on|off`
-
-Чтобы не раскладывать `.env` и конфиг по каждой папке, можно один раз настроить общее окружение:
-
-```bash
-glw global on                        # включить; локальный конфиг из текущей папки скопируется в %APPDATA%/glw/, если там пусто
-glw init glpat-xxx                   # при включённом режиме init пишет сразу в %APPDATA%/glw/
-glw global status                    # что включено и какие файлы есть
-glw global off                       # вернуться к локальным конфигам
-```
-
-При включённом глобальном режиме `glw init` настраивает глобальную папку автоматически; `--local` заставит его писать в текущую директорию, `--global` — в глобальную независимо от режима.
-
-### Просмотр и правка настроек — `glw config` (алиас `cfg`)
-
-```bash
-glw config                                   # показать итоговую конфигурацию (токен замаскирован)
-glw config url https://gitlab.example.com    # задать значение
-glw config project acme/backend-api
-glw config token glpat-xxx                   # токен уходит в .env, а не в json
-glw cfg url                                  # прочитать одно значение
-glw config project --unset                   # удалить ключ
-```
-
-Куда пишется — по тому же правилу, что у `init`: при включённом глобальном режиме в `%APPDATA%/glw/`, иначе в текущую папку; `--global`/`--local` задают цель явно.
-
-При включённом режиме `glw` работает из любой директории. Локальные файлы по-прежнему главнее: если в папке проекта лежит свой `glw.config.json` или `.env` — используются они (как у git: local > global). `glw use` без локального конфига сохраняет проект в глобальный. На POSIX-системах глобальная папка — `~/.config/glw/`.
 
 Пример `glw.config.json`:
 
@@ -186,16 +218,45 @@ glw config project --unset                   # удалить ключ
 }
 ```
 
-`glw init [token]` создаёт этот файл (существующий не трогает), а с аргументом-токеном записывает `GITLAB_TOKEN=<token>` в `.env` (файл создаётся или строка заменяется). Токен нужен с областью доступа **`api`**: `https://ваш-gitlab/-/user_settings/personal_access_tokens`.
+`glw init [token]` создаёт этот файл (существующий не трогает), а с аргументом-токеном записывает `GITLAB_TOKEN=<token>` в `.env`. Токен нужен с областью доступа **`api`**: `https://ваш-gitlab/-/user_settings/personal_access_tokens`.
 
-### Выбор проекта
+**Просмотр и правка** — `glw config` (алиас `cfg`):
 
-Везде, где принимается проект (`glw use`, `--project`), можно передавать как полный путь (`acme/internal/backend-api`), так и уникальное короткое имя (`backend-api`) — оно ищется среди ваших проектов: точный путь → точное имя → последний сегмент пути → уникальная подстрока. При неоднозначности `glw` покажет кандидатов.
+```bash
+glw config                                   # показать итоговую конфигурацию (токен замаскирован)
+glw config url https://gitlab.example.com    # задать значение
+glw config token glpat-xxx                   # токен уходит в .env, а не в json
+glw cfg url                                  # прочитать одно значение
+glw config project --unset                   # удалить ключ
+```
 
-## `glw projects` — флаги
+**Выбор проекта**: везде, где принимается проект (`glw use`, `--project`), можно передавать полный путь (`acme/internal/backend-api`) или уникальное короткое имя (`backend-api`) — оно ищется среди ваших проектов: точный путь → точное имя → последний сегмент пути → уникальная подстрока. При неоднозначности `glw` покажет кандидатов.
+
+</details>
+
+<details>
+<summary><b>🌍 Глобальное окружение — <code>glw global</code></b></summary>
+
+<br>
+
+```bash
+glw global on        # включить; локальный конфиг из текущей папки скопируется в %APPDATA%/glw/, если там пусто
+glw init glpat-xxx   # при включённом режиме init пишет сразу в %APPDATA%/glw/
+glw global status    # что включено и какие файлы есть
+glw global off       # вернуться к локальным конфигам
+```
+
+При включённом режиме `glw` работает из любой директории. Локальные файлы по-прежнему главнее: если в папке проекта лежит свой `glw.config.json` или `.env` — используются они (как у git: local > global). `glw use` без локального конфига сохраняет проект в глобальный. Команды `init` и `config` пишут в глобальную папку автоматически (`--local`/`--global` задают цель явно). На POSIX-системах глобальная папка — `~/.config/glw/`.
+
+</details>
+
+<details>
+<summary><b>📃 <code>glw projects</code> — пагинация и сортировка</b></summary>
+
+<br>
 
 | Флаг | По умолчанию | Описание |
-|------|-------------|----------|
+|------|:---:|----------|
 | `--search <q>` | — | Фильтр по имени |
 | `--limit <n>` | 100 | Сколько проектов загрузить максимум |
 | `--per-page <n>` | 30 | Размер страницы интерактивной пагинации |
@@ -203,14 +264,19 @@ glw config project --unset                   # удалить ключ
 | `--paginate` / `--no-paginate` | авто | Принудительно включить/выключить пагинацию |
 | `--json` | — | JSON-вывод (без пагинации) |
 
-Пагинация включается автоматически, когда вывод — терминал и результатов больше `--per-page`. Текущий проект помечен `*`. Успешный вызов обновляет кэш путей для автодополнения (`%APPDATA%/glw/projects.json`, на POSIX — `~/.config/glw/`).
+Пагинация включается автоматически, когда вывод — терминал и результатов больше `--per-page`. Текущий проект помечен `*`. Успешный вызов обновляет кэш путей для автодополнения (`%APPDATA%/glw/projects.json`).
 
-## `glw search` — флаги
+</details>
+
+<details>
+<summary><b>🔍 <code>glw search</code> — фильтры</b></summary>
+
+<br>
 
 Требуется хотя бы один фильтр; все условия объединяются через AND.
 
 | Флаг | По умолчанию | Описание |
-|------|-------------|----------|
+|------|:---:|----------|
 | `text` (позиционный) | — | Вхождение в заголовок или описание |
 | `--name <q>` | — | Заголовок содержит строку (без учёта регистра) |
 | `--body <q>` | — | Описание содержит строку |
@@ -223,31 +289,55 @@ glw search --name "auth" --body "JWT" --start_time 2026-01-01
 glw s "bug" --state all --json
 ```
 
-## `glw list` — флаги
+</details>
 
-`--state opened|closed|all` (по умолчанию opened), `--search <q>`, `--assignee <u|@me>`, `--label <l>`, `--limit <n>` (по умолчанию 50), `--json`.
+<details>
+<summary><b>✏️ <code>glw update</code> / <code>glw close</code> — выборка и поля</b></summary>
 
-## `glw update` — выборка и поля
+<br>
 
-Выборка: явные номера (`glw update 42 43 ...`) **или** фильтры `--search <q>`, `--filter-assignee <u|@me>`, `--filter-label <l>`, `--state <s>`. При выборке фильтрами показывается список совпадений и запрашивается подтверждение (пропускается с `--yes`); `--dry-run` — только показать, ничего не менять.
+**Выборка**: явные номера (`glw update 42 43`) **или** фильтры `--search <q>`, `--filter-assignee <u|@me>`, `--filter-label <l>`, `--state <s>`. При выборке фильтрами показывается список совпадений и запрашивается подтверждение (пропускается с `--yes`); `--dry-run` — только показать.
 
-Поля: `--title`, `--body` / `--body-file <f>`, `--status <имя>`, `--assignee <u|@me|none>`, `--labels <csv>` (заменить все), `--add-label` / `--remove-label` (повторяемые), `--weight <n|none>`, `--start <дата|none>`, `--due <дата|none>`, `--estimate <dur>`, `--spend <dur>` (+ `--summary`). Значение `none` очищает поле.
+**Поля**: `--title`, `--body` / `--body-file <f>`, `--status <имя>`, `--assignee <u|@me|none>`, `--labels <csv>` (заменить все), `--add-label` / `--remove-label` (повторяемые), `--weight <n|none>`, `--start <дата|none>`, `--due <дата|none>`, `--estimate <dur>`, `--spend <dur>` (+ `--summary`). Значение `none` очищает поле.
 
 При ошибке на отдельной задаче массовая операция продолжается, код выхода будет ненулевым.
 
-## `glw close`
+`glw close` использует те же фильтры; `--comment "<текст>"` добавит комментарий перед закрытием. `glw list`: `--state`, `--search`, `--assignee`, `--label`, `--limit` (по умолчанию 50), `--json`.
 
-По номерам или тем же фильтрам, что у `update` (с подтверждением/`--yes`); `--comment "<текст>"` добавит комментарий перед закрытием.
+</details>
 
-## Форматы
+<details>
+<summary><b>📄 Форматы: файлы задач, длительности, статусы</b></summary>
+
+<br>
 
 **Длительности** (estimate/spend): `2h`, `30m`, `1h30m`, `3d`, `1w2d3h`.
 
 **Статусы**: `To do`, `In progress`, `Done`, `Won't do`, `Duplicate` (регистр не важен; проект может определять свои — при опечатке `glw` покажет доступные).
 
-**Файл задачи (`glw create`)** — `.md`/`.txt` с YAML-шапкой между `---`. Ключи: `title`, `labels`, `assignees`/`assignee`, `weight`, `estimate`, `start`/`start_date`, `due`/`due_date`, `status`, `confidential`, `type`. Если в шапке нет ни одного известного ключа (например, это шаблон GitLab с `name:`/`about:`) — весь файл, включая `---`-блок, станет описанием задачи. `.json`-файл: те же поля плюс `description`/`body`.
+**Файл задачи (`glw create`)** — `.md`/`.txt` с YAML-шапкой между `---`. Ключи: `title`, `labels`, `assignees`/`assignee`, `weight`, `estimate`, `start`/`start_date`, `due`/`due_date`, `status`, `confidential`, `type`. Если в шапке нет ни одного известного ключа (например, это шаблон GitLab с `name:`/`about:`) — весь файл, включая `---`-блок, станет описанием задачи.
 
-## Автодополнение в шелле
+`.json`-файл: те же поля плюс `description`/`body`:
+
+```json
+{
+  "title": "Название задачи",
+  "description": "Описание",
+  "labels": ["bug", "v2"],
+  "assignees": ["alice"],
+  "weight": 5,
+  "estimate": "2h",
+  "due": "2026-07-31",
+  "status": "To do"
+}
+```
+
+</details>
+
+<details>
+<summary><b>⌨️ Автодополнение в шелле</b></summary>
+
+<br>
 
 ```bash
 # bash — в ~/.bashrc:
@@ -264,7 +354,12 @@ glw completion powershell | Out-String | Invoke-Expression
 
 Дополняются имена команд/алиасов и пути проектов после `use` и `--project` (из кэша `%APPDATA%/glw/projects.json`, который наполняется командами `glw projects` и `glw use`).
 
-## Переменные окружения
+</details>
+
+<details>
+<summary><b>🌐 Переменные окружения и глобальные флаги</b></summary>
+
+<br>
 
 | Переменная | Описание |
 |---|---|
@@ -273,12 +368,16 @@ glw completion powershell | Out-String | Invoke-Expression
 | `GITLAB_PROJECT` | Путь к проекту по умолчанию |
 | `NO_COLOR` | Отключить цветной вывод |
 
-## Глобальные флаги
+Глобальные флаги: `--project <ref>` (путь или короткое имя), `--json`, `--help`/`-h`.
 
-- `--project <ref>` — переопределить проект для одной команды (путь или короткое имя)
-- `--json` — машиночитаемый вывод (где поддерживается)
-- `--help`, `-h` — справка по команде
+</details>
 
-## Для AI-агентов
+---
 
-В репозитории есть готовый навык `skills/glw/` — он обучает агентов (Claude Code и совместимых) корректно выполнять задачи через `glw`: проверка окружения, безопасный протокол массовых операций, разбор ошибок. Чтобы Claude Code подхватывал его автоматически, скопируйте папку в `.claude/skills/` проекта (или `~/.claude/skills/` — глобально). Технические детали для разработки — в `CLAUDE.md`.
+<div align="center">
+
+**[⬆ Наверх](#-glw)**
+
+Сделано на [Bun](https://bun.sh) · GraphQL Work Items API · Ноль зависимостей
+
+</div>
