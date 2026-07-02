@@ -7,6 +7,7 @@
 Создавайте задачи из markdown-файлов, редактируйте любые поля одной строкой,<br>
 ведите учёт времени и закрывайте десятки задач разом.
 
+[![Release](https://img.shields.io/github/v/release/Aver005/gitlab-worker?color=22c55e&labelColor=14151a)](https://github.com/Aver005/gitlab-worker/releases/latest)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3-f9f1e1?logo=bun&logoColor=f9f1e1&labelColor=14151a)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white&labelColor=14151a)](https://www.typescriptlang.org)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-0-22c55e?labelColor=14151a)](package.json)
