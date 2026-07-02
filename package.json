@@ -1,0 +1,15 @@
+{
+  "name": "glw",
+  "version": "0.1.0",
+  "bin": {
+    "glw": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
