@@ -210,7 +210,7 @@ async function resolveConfig(project?: string): Promise<Config> {
 
 // init
 async function cmdInit(args: string[]): Promise<void> {
-  const { positionals } = parseArgs({
+  const { values, positionals } = parseArgs({
     args,
     options: {
       help: { type: "boolean", short: "h" },
@@ -218,6 +218,21 @@ async function cmdInit(args: string[]): Promise<void> {
     allowPositionals: true,
     strict: false,
   });
+
+  if (values["help"]) {
+    console.log(`
+glw init [token]
+
+Create a glw.config.json template in the current directory (left untouched
+if it already exists). With a token argument, also write GITLAB_TOKEN=<token>
+to .env (creates the file or replaces the existing line).
+
+Examples:
+  glw init
+  glw init glpat-xxxxxxxxxxxxxxxx
+`);
+    return;
+  }
 
   const token = positionals[0];
 
@@ -1474,6 +1489,21 @@ async function cmdSpend(args: string[]): Promise<void> {
 // completion
 function cmdCompletion(args: string[]): void {
   const shell = args[0];
+
+  if (!shell || shell === "--help" || shell === "-h") {
+    console.log(`
+glw completion <bash|zsh|powershell>
+
+Print a shell completion script. Setup:
+  bash:        eval "$(glw completion bash)"        # in ~/.bashrc
+  zsh:         eval "$(glw completion zsh)"         # in ~/.zshrc
+  powershell:  glw completion powershell | Out-String | Invoke-Expression  # in $PROFILE
+
+Completes command names and project paths after "use" / "--project"
+(from the cache at ~/.glw/projects.json, updated by "glw projects").
+`);
+    return;
+  }
 
   const subcommands = [
     "init", "whoami", "projects", "use", "search", "create", "list",

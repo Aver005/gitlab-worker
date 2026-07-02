@@ -1,259 +1,50 @@
-# glw — GitLab Work Items CLI
+# glw — задачи GitLab, не выходя из терминала
 
-CLI-инструмент для управления задачами (work items) в GitLab через GraphQL API. Требует Bun v1.3+.
+`glw` — маленький быстрый CLI для работы с задачами (issues / work items) GitLab. Создавайте задачи из обычных markdown-файлов, меняйте любые поля по номеру задачи, ведите учёт времени и выполняйте массовые операции одной командой — например, «закрыть всё, что висит на мне» или «перевести в In Progress все задачи с `refactor:` в названии».
 
-## Установка
+Работает через GraphQL API GitLab (в том числе со статусами задач, которых нет в REST). Требуется только [Bun](https://bun.sh) v1.3+ — никаких других зависимостей.
+
+## Быстрый старт
 
 ```bash
-# Клонировать или разместить в удобной директории, затем:
+# 1. Установить
 bun install
+bun link            # теперь команда glw доступна отовсюду
 
-# Вариант 1: глобальная ссылка (рекомендуется)
-bun link
-
-# Вариант 2: запуск напрямую
-bun run src/index.ts <команда>
-```
-
-## Настройка
-
-### 1. Создать конфиг-файл и задать токен
-
-```bash
-# Создать glw.config.json и записать токен в .env одной командой:
+# 2. Подключить GitLab (токен создаётся в GitLab: Settings → Access Tokens, scope "api")
 glw init glpat-xxxxxxxxxxxxxxxx
 
-# Или только создать конфиг (токен задать вручную позже):
-glw init
-```
+# 3. Указать адрес вашего GitLab в созданном glw.config.json:
+#    { "url": "https://gitlab.example.com", ... }
 
-Команда `glw init [token]`:
-- Создаёт `glw.config.json` в текущей директории (если файл уже есть — оставляет нетронутым).
-- Если передан токен — записывает `GITLAB_TOKEN=<token>` в файл `.env` в текущей директории (создаёт файл, если нет; заменяет существующую строку).
-- Выводит замаскированный токен: первые 8 символов + `...`.
+# 4. Выбрать проект
+glw projects        # посмотреть, какие проекты вам доступны
+glw use backend-api # запомнить выбранный (достаточно короткого имени)
 
-Пример `glw.config.json`:
-
-```json
-{
-  "url": "https://gitlab.example.com",
-  "project": "namespace/project-name",
-  "tokenEnv": "GITLAB_TOKEN"
-}
-```
-
-### 2. Создать Personal Access Token
-
-Откройте в браузере:
-```
-https://ваш-gitlab/-/user_settings/personal_access_tokens
-```
-
-Создайте токен с областью доступа **`api`**.
-
-### 3. Установить токен
-
-Быстрый способ — через `glw init`:
-
-```bash
-glw init glpat-xxxxxxxxxxxxxxxx
-```
-
-Или вручную задать переменную окружения:
-
-```bash
-export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxx"
-```
-
-Или добавить в `.env` в текущей директории:
-
-```
-GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxx
-```
-
-### Приоритет параметров
-
-1. Флаг `--project` (наивысший приоритет)
-2. Переменные окружения (`GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_PROJECT`)
-3. Файл `.env` в текущей директории
-4. `glw.config.json`
-
-Проект не обязательно вписывать руками: `glw projects` покажет доступные, `glw use <имя>` сохранит выбранный в конфиг.
-
-## Алиасы команд
-
-| Алиас | Команда  |
-|-------|----------|
-| `i`   | `init`   |
-| `s`   | `search` |
-| `p`   | `projects` |
-| `l`, `ls` | `list` |
-| `v`   | `view`   |
-| `cr`  | `create` |
-| `u`   | `update` |
-| `co`  | `comment` |
-
-Команда `use` не имеет однобуквенного алиаса (`u` занята командой `update`).
-
-## Автодополнение в шелле
-
-### Bash
-
-```bash
-# Добавить в ~/.bashrc:
-eval "$(glw completion bash)"
-```
-
-### Zsh
-
-```bash
-# Добавить в ~/.zshrc:
-eval "$(glw completion zsh)"
-```
-
-### PowerShell
-
-```powershell
-# Добавить в $PROFILE:
-glw completion powershell | Out-String | Invoke-Expression
-```
-
-Автодополнение поддерживает: имена команд и алиасов (первое слово), пути к проектам после `use` и `--project` (из локального кэша `~/.glw/projects.json`).
-
-Кэш проектов обновляется автоматически при каждом успешном вызове `glw projects`.
-
-## Команды
-
-### `glw whoami`
-
-Показывает текущего аутентифицированного пользователя. Не требует настроенного проекта.
-
-```bash
+# 5. Проверить, что всё работает
 glw whoami
-glw whoami --json
-```
-
-### `glw projects`
-
-Список проектов, в которых вы состоите. Текущий проект помечен `*`. После успешного запроса кэширует список путей в `~/.glw/projects.json`.
-
-```bash
-glw projects
-glw projects --search backend
-glw projects --json
-
-# Пагинация и сортировка
-glw projects --limit 200 --per-page 20 --sort za
-glw projects --paginate          # принудительная интерактивная пагинация
-glw projects --no-paginate       # вывести всё без пагинации
-```
-
-Флаги:
-
-| Флаг | По умолчанию | Описание |
-|------|-------------|----------|
-| `--search <q>` | — | Фильтр по имени |
-| `--limit <n>` | 100 | Максимальное количество проектов для загрузки |
-| `--per-page <n>` | 30 | Размер страницы для интерактивной пагинации |
-| `--sort az\|za` | `az` | Сортировка по fullPath; принимает также `asc`/`desc` |
-| `--paginate` | — | Принудительная интерактивная пагинация |
-| `--no-paginate` | — | Отключить пагинацию |
-| `--json` | — | JSON-вывод (без пагинации) |
-
-Интерактивная пагинация включается автоматически, если stdout является TTY и результатов больше, чем `--per-page`.
-
-### `glw use <project>`
-
-Устанавливает проект по умолчанию (сохраняется в `glw.config.json`). Принимает полный путь или уникальное короткое имя.
-
-```bash
-glw use backend-api
-glw use acme/internal/backend-api
-```
-
-### `glw search`
-
-Поиск задач с фильтрами. Требует хотя бы один фильтр.
-
-```bash
-# Поиск по тексту (в заголовке и описании)
-glw search "authentication"
-glw s "JWT"
-
-# По заголовку
-glw search --name "auth module"
-
-# По описанию
-glw search --body "JWT token"
-
-# По дате начала
-glw search --start_time 2026-01-01
-glw search --start 2026-01-01   # алиас --start_time
-
-# Комбинирование фильтров (все условия AND)
-glw search --name "auth" --body "JWT" --start_time 2026-01-01
-
-# По состоянию и с JSON-выводом
-glw search "bug" --state all --json
-
-# С лимитом
-glw search --name "refactor" --limit 50
-```
-
-Флаги:
-
-| Флаг | По умолчанию | Описание |
-|------|-------------|----------|
-| `text` (позиционный) | — | Поиск в заголовке и описании |
-| `--name <q>` | — | Заголовок содержит строку (регистр не важен) |
-| `--body <q>` | — | Описание содержит строку (регистр не важен) |
-| `--start_time <d>` / `--start <d>` | — | Дата начала >= YYYY-MM-DD |
-| `--state <s>` | `opened` | `opened` \| `closed` \| `all` |
-| `--limit <n>` | 200 | Максимум загружаемых задач |
-| `--project <ref>` | — | Переопределить проект |
-| `--json` | — | JSON-вывод |
-
-### `glw list`
-
-Выводит список задач.
-
-```bash
-# Открытые задачи (по умолчанию)
 glw list
-
-# Все задачи с поиском
-glw list --state all --search "refactor"
-
-# Только задачи конкретного пользователя с меткой
-glw list --assignee @me --label "bug"
-
-# Закрытые, лимит 100
-glw list --state closed --limit 100
-
-# JSON-вывод
-glw list --json
 ```
 
-### `glw view <iid>`
+Готово — дальше просто пользуетесь.
 
-Подробная информация о задаче.
+## Повседневная работа
+
+**Посмотреть задачи:**
 
 ```bash
-glw view 42
-glw view 42 --json
+glw list                          # открытые задачи проекта
+glw list --assignee @me           # только мои
+glw view 42                       # вся информация по задаче #42
 ```
 
-### `glw create <file>`
-
-Создаёт задачу из файла (`.md`, `.txt`, `.json`).
-
-**Пример файла `issue.md`:**
+**Создать задачу из файла** — пишете обычный markdown, метаданные (опционально) в шапке:
 
 ```markdown
 ---
 title: Реализовать авторизацию
 labels: backend, security
-assignee: johndoe
+assignee: @me
 weight: 8
 estimate: 3h
 due: 2026-07-31
@@ -261,165 +52,202 @@ status: To do
 ---
 
 ## Описание
-
 Нужно реализовать JWT-авторизацию.
 ```
 
 ```bash
 glw create issue.md
-
-# С переопределением флагами
-glw create issue.md --title "Другой заголовок" --assignee @me --label urgent
-
-# Другой проект
-glw create issue.md --project acme/other-project
 ```
 
-### `glw update`
+Если шапки нет — заголовком станет первый `# заголовок` файла. Подойдёт и `.txt`, и `.json`.
 
-Обновляет одну или несколько задач.
+**Изменить задачу** — любые поля по номеру:
 
 ```bash
-# По номеру задачи
 glw update 42 --status "In progress" --assignee @me
-
-# По нескольким номерам
-glw update 42 43 44 --label bug --weight 5
-
-# По поиску — показывает совпадения и запрашивает подтверждение
-glw update --search "refactor:" --status "In progress" --yes
-
-# Изменить только метки
-glw update 42 --add-label "ready for review" --remove-label "in-progress"
-
-# Установить/снять дату
-glw update 42 --due "2026-08-01" --start "2026-07-15"
-glw update 42 --due none  # убрать дату
-
-# Установить вес (или убрать)
-glw update 42 --weight 5
-glw update 42 --weight none
-
-# Предварительный просмотр без применения
-glw update --search "old:" --title "new title" --dry-run
+glw update 42 --add-label bug --weight 5
+glw update 42 --due 2026-08-01          # поставить дедлайн
+glw update 42 --due none                # снять дедлайн ("none" очищает поле)
 ```
 
-### `glw close`
-
-Закрывает задачи.
+**Прокомментировать и закрыть:**
 
 ```bash
-# По номеру
-glw close 42
-
-# С комментарием
+glw comment 42 "Проверено, работает"
 glw close 42 --comment "Реализовано в MR !123"
-
-# По фильтру (с подтверждением)
-glw close --filter-assignee @me --yes
-
-# Закрыть все задачи с меткой
-glw close --filter-label "obsolete" --yes
-```
-
-### `glw reopen`
-
-Переоткрывает задачи.
-
-```bash
 glw reopen 42
-glw reopen 42 43 44
 ```
 
-### `glw comment <iid>`
-
-Добавляет комментарий к задаче.
+**Учёт времени:**
 
 ```bash
-# Текст в аргументе
-glw comment 42 "Проверено, работает корректно"
-
-# Из файла
-glw comment 42 --file notes.txt
-
-# Внутренняя заметка (confidential note)
-glw comment 42 "Внутреннее замечание" --internal
+glw estimate 42 2h                       # оценка
+glw spend 42 1h30m --summary "ревью"     # затраченное время
 ```
 
-### `glw estimate <iid> <dur>`
-
-Устанавливает оценку времени.
+**Найти задачу:**
 
 ```bash
-glw estimate 42 2h
-glw estimate 42 1h30m
-glw estimate 42 3d
+glw search "авторизация"          # ищет в названии и описании
+glw search --name "auth"          # только в названии
+glw search --name auth --state all
 ```
 
-### `glw spend <iid> <dur>`
+## Массовые операции
 
-Логирует затраченное время.
+Самое приятное: можно выбрать задачи фильтром и изменить все разом. Перед изменением `glw` покажет список совпавших задач и спросит подтверждение.
 
 ```bash
-glw spend 42 1h
-glw spend 42 30m --summary "code review"
-glw spend 42 2h --summary "рефакторинг контроллера"
+# Перевести в In Progress всё, у чего в названии есть "refactor:"
+glw update --search "refactor:" --status "In progress"
+
+# Закрыть все открытые задачи, назначенные на меня
+glw close --filter-assignee @me
+
+# Сначала посмотреть, что попадёт под изменение, ничего не меняя:
+glw update --search "refactor:" --status Done --dry-run
 ```
 
-### `glw completion <shell>`
+Для скриптов и автоматизации добавляйте `--yes` — подтверждение будет пропущено. Без TTY (например, в CI) команда без `--yes` безопасно отменится сама.
 
-Выводит скрипт автодополнения для указанного шелла.
+## Шпаргалка
 
-```bash
-glw completion bash
-glw completion zsh
-glw completion powershell
-```
+| Команда | Алиас | Что делает |
+|---|---|---|
+| `glw init [token]` | `i` | Создать конфиг; с токеном — записать его в `.env` |
+| `glw whoami` | | Кто я (проверка подключения) |
+| `glw projects` | `p` | Мои проекты |
+| `glw use <проект>` | | Выбрать проект по умолчанию |
+| `glw list` | `l`, `ls` | Список задач |
+| `glw view <iid>` | `v` | Подробности задачи |
+| `glw search <...>` | `s` | Поиск задач по фильтрам |
+| `glw create <файл>` | `cr` | Создать задачу из файла |
+| `glw update <iid...>` | `u` | Изменить поля задач(и) |
+| `glw comment <iid>` | `co` | Добавить комментарий |
+| `glw close [iid...]` | | Закрыть задачи |
+| `glw reopen <iid...>` | | Переоткрыть задачи |
+| `glw estimate <iid> <dur>` | | Оценка времени |
+| `glw spend <iid> <dur>` | | Залогировать время |
+| `glw completion <shell>` | | Скрипт автодополнения |
 
-## Форматы продолжительности
+У каждой команды есть `--help` с полным списком флагов: `glw update --help`.
 
-Используются форматы GitLab: `2h`, `30m`, `1h30m`, `3d`, `1w2d3h`.
+---
 
-## Формат входных файлов
+# Справочник
 
-### Markdown / txt с YAML-фронтматтером
+## Настройка
 
-Опциональный блок фронтматтера между строками `---`. Поддерживаемые ключи:
-`title`, `labels`, `assignees` / `assignee`, `weight`, `estimate`,
-`start` / `start_date`, `due` / `due_date`, `status`, `confidential`, `type`.
+### Откуда берутся параметры (по убыванию приоритета)
 
-Если фронтматтер не содержит ни одного из поддерживаемых ключей (например, шаблоны GitLab-ишью с `name:`, `about:`), то весь файл включая блок `---` считается телом задачи.
+1. Флаг `--project` у конкретной команды
+2. Переменные окружения: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_PROJECT`
+3. Файл `.env` в текущей директории
+4. `glw.config.json` в текущей директории
 
-### JSON
+Пример `glw.config.json`:
 
 ```json
 {
-  "title": "Название задачи",
-  "description": "Описание",
-  "labels": ["bug", "v2"],
-  "assignees": ["alice"],
-  "weight": 5,
-  "estimate": "2h",
-  "start": "2026-07-01",
-  "due": "2026-07-31",
-  "status": "To do",
-  "type": "Issue"
+  "url": "https://gitlab.example.com",
+  "project": "acme/internal/backend-api",
+  "tokenEnv": "GITLAB_TOKEN"
 }
 ```
+
+`glw init [token]` создаёт этот файл (существующий не трогает), а с аргументом-токеном записывает `GITLAB_TOKEN=<token>` в `.env` (файл создаётся или строка заменяется). Токен нужен с областью доступа **`api`**: `https://ваш-gitlab/-/user_settings/personal_access_tokens`.
+
+### Выбор проекта
+
+Везде, где принимается проект (`glw use`, `--project`), можно передавать как полный путь (`acme/internal/backend-api`), так и уникальное короткое имя (`backend-api`) — оно ищется среди ваших проектов: точный путь → точное имя → последний сегмент пути → уникальная подстрока. При неоднозначности `glw` покажет кандидатов.
+
+## `glw projects` — флаги
+
+| Флаг | По умолчанию | Описание |
+|------|-------------|----------|
+| `--search <q>` | — | Фильтр по имени |
+| `--limit <n>` | 100 | Сколько проектов загрузить максимум |
+| `--per-page <n>` | 30 | Размер страницы интерактивной пагинации |
+| `--sort az\|za` | `az` | Сортировка по пути (принимает и `asc`/`desc`) |
+| `--paginate` / `--no-paginate` | авто | Принудительно включить/выключить пагинацию |
+| `--json` | — | JSON-вывод (без пагинации) |
+
+Пагинация включается автоматически, когда вывод — терминал и результатов больше `--per-page`. Текущий проект помечен `*`. Успешный вызов обновляет кэш путей для автодополнения (`~/.glw/projects.json`).
+
+## `glw search` — флаги
+
+Требуется хотя бы один фильтр; все условия объединяются через AND.
+
+| Флаг | По умолчанию | Описание |
+|------|-------------|----------|
+| `text` (позиционный) | — | Вхождение в заголовок или описание |
+| `--name <q>` | — | Заголовок содержит строку (без учёта регистра) |
+| `--body <q>` | — | Описание содержит строку |
+| `--start_time <d>` / `--start <d>` | — | Дата начала ≥ `YYYY-MM-DD` |
+| `--state <s>` | `opened` | `opened` \| `closed` \| `all` |
+| `--limit <n>` | 200 | Максимум загружаемых задач |
+
+```bash
+glw search --name "auth" --body "JWT" --start_time 2026-01-01
+glw s "bug" --state all --json
+```
+
+## `glw list` — флаги
+
+`--state opened|closed|all` (по умолчанию opened), `--search <q>`, `--assignee <u|@me>`, `--label <l>`, `--limit <n>` (по умолчанию 50), `--json`.
+
+## `glw update` — выборка и поля
+
+Выборка: явные номера (`glw update 42 43 ...`) **или** фильтры `--search <q>`, `--filter-assignee <u|@me>`, `--filter-label <l>`, `--state <s>`. При выборке фильтрами показывается список совпадений и запрашивается подтверждение (пропускается с `--yes`); `--dry-run` — только показать, ничего не менять.
+
+Поля: `--title`, `--body` / `--body-file <f>`, `--status <имя>`, `--assignee <u|@me|none>`, `--labels <csv>` (заменить все), `--add-label` / `--remove-label` (повторяемые), `--weight <n|none>`, `--start <дата|none>`, `--due <дата|none>`, `--estimate <dur>`, `--spend <dur>` (+ `--summary`). Значение `none` очищает поле.
+
+При ошибке на отдельной задаче массовая операция продолжается, код выхода будет ненулевым.
+
+## `glw close`
+
+По номерам или тем же фильтрам, что у `update` (с подтверждением/`--yes`); `--comment "<текст>"` добавит комментарий перед закрытием.
+
+## Форматы
+
+**Длительности** (estimate/spend): `2h`, `30m`, `1h30m`, `3d`, `1w2d3h`.
+
+**Статусы**: `To do`, `In progress`, `Done`, `Won't do`, `Duplicate` (регистр не важен; проект может определять свои — при опечатке `glw` покажет доступные).
+
+**Файл задачи (`glw create`)** — `.md`/`.txt` с YAML-шапкой между `---`. Ключи: `title`, `labels`, `assignees`/`assignee`, `weight`, `estimate`, `start`/`start_date`, `due`/`due_date`, `status`, `confidential`, `type`. Если в шапке нет ни одного известного ключа (например, это шаблон GitLab с `name:`/`about:`) — весь файл, включая `---`-блок, станет описанием задачи. `.json`-файл: те же поля плюс `description`/`body`.
+
+## Автодополнение в шелле
+
+```bash
+# bash — в ~/.bashrc:
+eval "$(glw completion bash)"
+
+# zsh — в ~/.zshrc:
+eval "$(glw completion zsh)"
+```
+
+```powershell
+# PowerShell — в $PROFILE:
+glw completion powershell | Out-String | Invoke-Expression
+```
+
+Дополняются имена команд/алиасов и пути проектов после `use` и `--project` (из кэша `~/.glw/projects.json`, который наполняется командами `glw projects` и `glw use`).
 
 ## Переменные окружения
 
 | Переменная | Описание |
 |---|---|
 | `GITLAB_URL` | URL GitLab-инстанса |
-| `GITLAB_TOKEN` | Personal Access Token (имя можно изменить через `tokenEnv`) |
-| `GITLAB_PROJECT` | Путь к проекту (например, `group/project`) |
+| `GITLAB_TOKEN` | Personal Access Token (имя переменной настраивается через `tokenEnv`) |
+| `GITLAB_PROJECT` | Путь к проекту по умолчанию |
 | `NO_COLOR` | Отключить цветной вывод |
-
-Все переменные также можно задать в файле `.env` в текущей директории (реальные переменные окружения имеют приоритет).
 
 ## Глобальные флаги
 
-- `--project <ref>` — переопределить проект для одной команды: полный путь (`group/project`) или уникальное короткое имя (например, `--project backend-api`)
-- `--json` — машиночитаемый JSON-вывод (где поддерживается)
+- `--project <ref>` — переопределить проект для одной команды (путь или короткое имя)
+- `--json` — машиночитаемый вывод (где поддерживается)
 - `--help`, `-h` — справка по команде
+
+## Для AI-агентов
+
+В репозитории есть готовый навык `skills/glw/` — он обучает агентов (Claude Code и совместимых) корректно выполнять задачи через `glw`: проверка окружения, безопасный протокол массовых операций, разбор ошибок. Чтобы Claude Code подхватывал его автоматически, скопируйте папку в `.claude/skills/` проекта (или `~/.claude/skills/` — глобально). Технические детали для разработки — в `CLAUDE.md`.
