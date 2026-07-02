@@ -109,10 +109,17 @@ function readConfigFileFrom(dir: string): ConfigFile {
   }
 }
 
-export function loadConfig(
-  projectOverride?: string,
-  requireProject = true
-): Config {
+interface ConfigLayers {
+  env: (key: string) => string | undefined;
+  file: <K extends keyof ConfigFile>(key: K) => ConfigFile[K];
+  globalOn: boolean;
+  gdir: string;
+}
+
+/** Resolve all config layers. Priority: process.env > local .env > global .env;
+ *  local glw.config.json > global glw.config.json. Global layers only when
+ *  global mode is on. */
+function resolveLayers(): ConfigLayers {
   const cwd = process.cwd();
   const globalOn = isGlobalMode();
   const gdir = globalDir();
@@ -122,11 +129,19 @@ export function loadConfig(
   const localEnv = loadDotEnvFrom(cwd);
   const globalEnv = globalOn ? loadDotEnvFrom(gdir) : {};
 
-  // Priority: process.env > local .env > global .env; local file > global file
-  const env = (key: string): string | undefined =>
-    process.env[key] ?? localEnv[key] ?? globalEnv[key];
-  const file = <K extends keyof ConfigFile>(key: K): ConfigFile[K] =>
-    localFile[key] ?? globalFile[key];
+  return {
+    env: (key) => process.env[key] ?? localEnv[key] ?? globalEnv[key],
+    file: (key) => localFile[key] ?? globalFile[key],
+    globalOn,
+    gdir,
+  };
+}
+
+export function loadConfig(
+  projectOverride?: string,
+  requireProject = true
+): Config {
+  const { env, file, globalOn, gdir } = resolveLayers();
 
   const globalHint = globalOn
     ? `Global mode is ON — files are also read from ${gdir}.`
@@ -240,6 +255,65 @@ export function writeDotEnvToken(token: string, dir = process.cwd()): void {
     lines.push(newLine);
   }
   writeFileSync(envPath, lines.join("\n") + "\n");
+}
+
+// ─── glw config command support ───────────────────────────────────────────────
+
+export const CONFIG_KEYS = ["url", "project", "tokenEnv", "token"] as const;
+export type ConfigKey = (typeof CONFIG_KEYS)[number];
+
+export interface ConfigInspection {
+  url?: string;
+  project?: string;
+  tokenEnv: string;
+  /** Effective token value (caller must mask before display). */
+  token?: string;
+  globalMode: boolean;
+  globalDir: string;
+}
+
+/** Non-throwing view of the effective configuration across all layers. */
+export function inspectConfig(): ConfigInspection {
+  const { env, file, globalOn, gdir } = resolveLayers();
+  const tokenEnvName = file("tokenEnv")?.trim() || "GITLAB_TOKEN";
+  return {
+    url: env("GITLAB_URL") ?? file("url"),
+    project: env("GITLAB_PROJECT") ?? file("project"),
+    tokenEnv: tokenEnvName,
+    token: env("GITLAB_TOKEN") ?? env(tokenEnvName) ?? file("token"),
+    globalMode: globalOn,
+    globalDir: gdir,
+  };
+}
+
+/** Set or unset (value === undefined) a glw.config.json field in `dir`.
+ *  Returns the config file path written. */
+export function setConfigValue(
+  key: Exclude<ConfigKey, "token">,
+  value: string | undefined,
+  dir: string
+): string {
+  mkdirSync(dir, { recursive: true });
+  const configPath = join(dir, CONFIG_FILE);
+  const fileConfig = readConfigFileFrom(dir);
+  if (value === undefined) {
+    delete fileConfig[key];
+  } else {
+    fileConfig[key] = value;
+  }
+  writeFileSync(configPath, JSON.stringify(fileConfig, null, 2) + "\n");
+  return configPath;
+}
+
+/** Remove the GITLAB_TOKEN line from .env in `dir` (other lines preserved). */
+export function removeDotEnvToken(dir: string): void {
+  const envPath = join(dir, ".env");
+  if (!existsSync(envPath)) return;
+  const lines = readFileSync(envPath, "utf-8")
+    .split(/\r?\n/)
+    .filter((l) => !/^(export\s+)?GITLAB_TOKEN\s*=/.test(l));
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  writeFileSync(envPath, lines.length > 0 ? lines.join("\n") + "\n" : "");
 }
 
 /** Copy local (cwd) glw.config.json and .env into the global dir if the

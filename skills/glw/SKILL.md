@@ -22,8 +22,8 @@ Preferred: `glw <command> [flags]` (if linked via `bun link`).
 Fallback if `glw` is not on PATH: `bun run src/index.ts <command> [flags]` from
 the repo root. Everything below uses `glw`; substitute the fallback verbatim.
 
-Aliases: `i`=init, `s`=search, `p`=projects, `l`/`ls`=list, `v`=view,
-`cr`=create, `u`=update, `co`=comment. (`use` has no alias.)
+Aliases: `i`=init, `cfg`=config, `s`=search, `p`=projects, `l`/`ls`=list,
+`v`=view, `cr`=create, `u`=update, `co`=comment. (`use` has no alias.)
 
 ## 1. Preflight (run once per session before mutations)
 
@@ -47,10 +47,15 @@ The CLI reads config in priority order: `--project` flag > env
 (POSIX: `~/.config/glw`) — the global layer applies only when enabled via
 `glw global on` (check: `glw global status`). Exact errors:
 
-- `GitLab URL not configured.` → user must set `GITLAB_URL` or `url` in
-  `glw.config.json`; suggest `glw init`. Do not guess a URL.
-- `GitLab access token not configured.` → user runs `glw init <token>` (writes
-  `GITLAB_TOKEN` to `.env`) or sets the env var. Never fabricate a token.
+Inspect the effective config safely (no network, never throws):
+`glw config` (alias `cfg`) — shows url/project/tokenEnv/masked token/global
+mode. Individual values: `glw config url`, etc.
+
+- `GitLab URL not configured.` → ask the user for the URL, then
+  `glw config url <url>`. Do not guess a URL.
+- `GitLab access token not configured.` → user runs `glw config token <token>`
+  or `glw init <token>` (both write `GITLAB_TOKEN` to `.env`). Never fabricate
+  a token.
 - `GitLab project not configured.` → run `glw projects` to list, then
   `glw use <name>` to persist, or pass `--project <ref>` per command.
 

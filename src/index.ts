@@ -14,6 +14,11 @@ import {
   isGlobalMode,
   setGlobalMode,
   migrateLocalToGlobal,
+  inspectConfig,
+  setConfigValue,
+  removeDotEnvToken,
+  CONFIG_KEYS,
+  type ConfigKey,
 } from "./config.ts";
 import type { Config } from "./config.ts";
 import {
@@ -68,6 +73,7 @@ Usage: glw <command> [options]
 
 Commands:
   init                  Create a glw.config.json template (or set token in .env)
+  config [key] [value]  Show or set configuration (url, project, tokenEnv, token)
   global <on|off>       Toggle the shared global environment (%APPDATA%/glw)
   whoami                Show the authenticated user
   projects              List projects you are a member of
@@ -85,7 +91,7 @@ Commands:
   completion <shell>    Print shell completion script (bash|zsh|powershell)
 
 Aliases:
-  i→init  s→search  p→projects  l/ls→list  v→view
+  i→init  cfg→config  s→search  p→projects  l/ls→list  v→view
   cr→create  u→update  co→comment
 
 Global flags:
@@ -101,6 +107,7 @@ Run "glw <command> --help" for command-specific help.
 
 const ALIASES: Record<string, string> = {
   i: "init",
+  cfg: "config",
   s: "search",
   p: "projects",
   co: "comment",
@@ -298,6 +305,111 @@ Next steps:
       handleError(err);
     }
   }
+}
+
+// config
+function maskToken(token: string): string {
+  return token.length > 8 ? token.slice(0, 8) + "..." : "***";
+}
+
+async function cmdConfig(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      global: { type: "boolean", short: "g" },
+      local: { type: "boolean" },
+      unset: { type: "boolean" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+    allowPositionals: true,
+    strict: false,
+  });
+
+  if (values["help"]) {
+    console.log(`
+glw config [key] [value] [--unset] [--global | --local]
+
+Show or set configuration. Keys: url, project, tokenEnv, token.
+
+  glw config                       show effective configuration (token masked)
+  glw config url                   print one value
+  glw config url https://gitlab.example.com
+  glw config token glpat-xxx       token goes to .env, never to the json file
+  glw config project --unset       remove a key
+
+Write target follows global mode (like "glw init"):
+  global mode ON  → ${globalDir()}
+  global mode OFF → current directory
+  --global / --local force one or the other.
+`);
+    return;
+  }
+
+  const key = positionals[0] as ConfigKey | undefined;
+  const value = positionals[1];
+
+  // No key → show effective config
+  if (!key) {
+    const info = inspectConfig();
+    if (values["json"]) {
+      console.log(
+        JSON.stringify({ ...info, token: info.token ? maskToken(info.token) : undefined })
+      );
+      return;
+    }
+    printTable([
+      ["url", info.url ?? dim("(not set)")],
+      ["project", info.project ?? dim("(not set)")],
+      ["tokenEnv", info.tokenEnv],
+      ["token", info.token ? green(maskToken(info.token)) : red("(not set)")],
+      ["global mode", info.globalMode ? green("on") : dim("off")],
+      ["global dir", dim(info.globalDir)],
+    ]);
+    return;
+  }
+
+  if (!(CONFIG_KEYS as readonly string[]).includes(key)) {
+    die(`Unknown config key "${key}". Valid keys: ${CONFIG_KEYS.join(", ")}`);
+  }
+
+  // Key without value → print it
+  if (value === undefined && !values["unset"]) {
+    const info = inspectConfig();
+    const current =
+      key === "token" ? (info.token ? maskToken(info.token) : undefined) : info[key];
+    if (current === undefined) {
+      console.log(dim("(not set)"));
+      process.exitCode = 1;
+    } else {
+      console.log(current);
+    }
+    return;
+  }
+
+  // Write target follows global mode; flags override (same rule as init)
+  const useGlobal = values["global"] ? true : values["local"] ? false : isGlobalMode();
+  const targetDir = useGlobal ? globalDir() : process.cwd();
+
+  if (key === "token") {
+    if (values["unset"]) {
+      removeDotEnvToken(targetDir);
+      console.log(`${yellow("Token removed")} ${dim(`from ${join(targetDir, ".env")}`)}`);
+    } else {
+      writeDotEnvToken(value!, targetDir);
+      console.log(
+        `${green("Token set")} ${dim(`in ${join(targetDir, ".env")}:`)} ${maskToken(value!)}`
+      );
+    }
+    return;
+  }
+
+  const written = setConfigValue(key, values["unset"] ? undefined : value, targetDir);
+  console.log(
+    values["unset"]
+      ? `${yellow(`${key} removed`)} ${dim(`(${written})`)}`
+      : `${green(`${key} = ${value}`)} ${dim(`(${written})`)}`
+  );
 }
 
 // global
@@ -1592,10 +1704,10 @@ Completes command names and project paths after "use" / "--project"
   }
 
   const subcommands = [
-    "init", "global", "whoami", "projects", "use", "search", "create", "list",
+    "init", "config", "global", "whoami", "projects", "use", "search", "create", "list",
     "view", "update", "comment", "close", "reopen", "estimate", "spend", "completion",
     // aliases
-    "i", "s", "p", "co", "cr", "u", "v", "l", "ls",
+    "i", "cfg", "s", "p", "co", "cr", "u", "v", "l", "ls",
   ].join(" ");
 
   if (shell === "bash") {
@@ -1680,6 +1792,10 @@ async function main(): Promise<void> {
     switch (cmd) {
       case "init":
         await cmdInit(rest);
+        break;
+
+      case "config":
+        await cmdConfig(rest);
         break;
 
       case "global":

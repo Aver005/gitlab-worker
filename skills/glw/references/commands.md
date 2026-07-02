@@ -31,6 +31,25 @@ glw init --local                     # force cwd even when global mode is on
 
 ---
 
+## config — `glw config [key] [value] [--unset] [--global|--local]` (alias `cfg`)
+
+Shows or sets configuration. Keys: `url`, `project`, `tokenEnv`, `token`.
+No args → effective config across all layers (token masked). Key only → prints
+the value (exit 1 + `(not set)` if absent). Key+value → writes it; `token`
+always goes to `.env` (never into the json file). `--unset` removes a key.
+Write target follows global mode exactly like `glw init`; `--global`/`--local`
+force it. Reading requires no project/token — safe for preflight checks.
+
+```bash
+glw config                                  # show everything
+glw config url https://gitlab.example.com   # set
+glw cfg project                             # read one value
+glw config token glpat-xxx                  # → .env
+glw config project --unset
+```
+
+---
+
 ## global — `glw global <on|off|status>`
 
 Toggles the shared global environment. When ON, glw also reads `.env` and
