@@ -1,10 +1,20 @@
 #!/usr/bin/env bun
 import { parseArgs } from "node:util";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
-import { loadConfig, writeConfigTemplate, saveConfigProject, writeDotEnvToken } from "./config.ts";
+import {
+  loadConfig,
+  writeConfigTemplate,
+  saveConfigProject,
+  writeDotEnvToken,
+  globalDir,
+  isGlobalMode,
+  setGlobalMode,
+  migrateLocalToGlobal,
+} from "./config.ts";
 import type { Config } from "./config.ts";
 import {
   getCurrentUser,
@@ -58,6 +68,7 @@ Usage: glw <command> [options]
 
 Commands:
   init                  Create a glw.config.json template (or set token in .env)
+  global <on|off>       Toggle the shared global environment (%APPDATA%/glw)
   whoami                Show the authenticated user
   projects              List projects you are a member of
   use <project>         Set the default project (saved to glw.config.json)
@@ -213,6 +224,7 @@ async function cmdInit(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
     args,
     options: {
+      global: { type: "boolean", short: "g" },
       help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
@@ -221,28 +233,33 @@ async function cmdInit(args: string[]): Promise<void> {
 
   if (values["help"]) {
     console.log(`
-glw init [token]
+glw init [token] [--global]
 
 Create a glw.config.json template in the current directory (left untouched
 if it already exists). With a token argument, also write GITLAB_TOKEN=<token>
 to .env (creates the file or replaces the existing line).
+With --global, both files go to the shared global dir (${globalDir()})
+used by "glw global on".
 
 Examples:
   glw init
   glw init glpat-xxxxxxxxxxxxxxxx
+  glw init glpat-xxxxxxxxxxxxxxxx --global
 `);
     return;
   }
 
   const token = positionals[0];
+  const targetDir = values["global"] ? globalDir() : process.cwd();
+  const configPath = join(targetDir, "glw.config.json");
 
   try {
-    const alreadyExisted = existsSync("glw.config.json");
-    writeConfigTemplate();
+    const alreadyExisted = existsSync(configPath);
+    writeConfigTemplate(targetDir);
     console.log(
       alreadyExisted
-        ? dim("glw.config.json already exists — left untouched")
-        : green("Created glw.config.json")
+        ? dim(`${configPath} already exists — left untouched`)
+        : green(`Created ${configPath}`)
     );
 
     if (!token) {
@@ -263,12 +280,70 @@ Next steps:
 
   if (token) {
     try {
-      writeDotEnvToken(token);
+      writeDotEnvToken(token, targetDir);
       const masked = token.slice(0, 8) + "...";
-      console.log(green(`GITLAB_TOKEN set in .env: ${masked}`));
+      console.log(green(`GITLAB_TOKEN set in ${join(targetDir, ".env")}: ${masked}`));
     } catch (err) {
       handleError(err);
     }
+  }
+}
+
+// global
+async function cmdGlobal(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      help: { type: "boolean", short: "h" },
+    },
+    allowPositionals: true,
+    strict: false,
+  });
+
+  const action = positionals[0];
+
+  if (values["help"] || (action && !["on", "off", "status"].includes(action))) {
+    console.log(`
+glw global <on|off|status>
+
+Toggle the shared global environment. When ON, glw also reads .env and
+glw.config.json from the global dir (local files in cwd still win):
+  ${globalDir()}
+
+  on      enable; copies local glw.config.json/.env there if it's empty
+  off     disable (cwd-only config, as before)
+  status  show current mode and which global files exist (default)
+
+Set it up from scratch with: glw init <token> --global
+`);
+    return;
+  }
+
+  const gdir = globalDir();
+
+  if (action === "on") {
+    setGlobalMode(true);
+    const copied = migrateLocalToGlobal();
+    console.log(`${green("Global mode ON")} ${dim(`(${gdir})`)}`);
+    if (copied.length > 0) {
+      console.log(dim(`Copied from current directory: ${copied.join(", ")}`));
+    }
+    return;
+  }
+
+  if (action === "off") {
+    setGlobalMode(false);
+    console.log(`${yellow("Global mode OFF")} ${dim("— config is read from the current directory only")}`);
+    return;
+  }
+
+  // status
+  const on = isGlobalMode();
+  console.log(`Global mode: ${on ? green("on") : yellow("off")}`);
+  console.log(dim(`Dir: ${gdir}`));
+  for (const name of ["glw.config.json", ".env"]) {
+    const exists = existsSync(join(gdir, name));
+    console.log(dim(`  ${name}: ${exists ? "present" : "absent"}`));
   }
 }
 
@@ -1506,7 +1581,7 @@ Completes command names and project paths after "use" / "--project"
   }
 
   const subcommands = [
-    "init", "whoami", "projects", "use", "search", "create", "list",
+    "init", "global", "whoami", "projects", "use", "search", "create", "list",
     "view", "update", "comment", "close", "reopen", "estimate", "spend", "completion",
     // aliases
     "i", "s", "p", "co", "cr", "u", "v", "l", "ls",
@@ -1594,6 +1669,10 @@ async function main(): Promise<void> {
     switch (cmd) {
       case "init":
         await cmdInit(rest);
+        break;
+
+      case "global":
+        await cmdGlobal(rest);
         break;
 
       case "whoami": {

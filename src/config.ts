@@ -1,5 +1,6 @@
-import { readFileSync, existsSync, writeFileSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 
 export interface Config {
   url: string;
@@ -15,6 +16,47 @@ interface ConfigFile {
 }
 
 const CONFIG_FILE = "glw.config.json";
+const SETTINGS_FILE = "settings.json";
+
+// ─── Global environment (%APPDATA%/glw, ~/.config/glw on POSIX) ──────────────
+
+/** Directory of the machine-global glw environment. Env injectable for tests. */
+export function globalDir(
+  env: Record<string, string | undefined> = process.env
+): string {
+  const appData = env["APPDATA"];
+  return appData ? join(appData, "glw") : join(homedir(), ".config", "glw");
+}
+
+interface GlobalSettings {
+  globalMode?: boolean;
+}
+
+function readGlobalSettings(): GlobalSettings {
+  try {
+    const p = join(globalDir(), SETTINGS_FILE);
+    if (!existsSync(p)) return {};
+    return JSON.parse(readFileSync(p, "utf-8")) as GlobalSettings;
+  } catch {
+    return {};
+  }
+}
+
+/** Toggle global mode; returns the settings file path. */
+export function setGlobalMode(on: boolean): string {
+  const dir = globalDir();
+  mkdirSync(dir, { recursive: true });
+  const p = join(dir, SETTINGS_FILE);
+  const settings: GlobalSettings = { ...readGlobalSettings(), globalMode: on };
+  writeFileSync(p, JSON.stringify(settings, null, 2) + "\n");
+  return p;
+}
+
+export function isGlobalMode(): boolean {
+  return readGlobalSettings().globalMode === true;
+}
+
+// ─── Config layers ────────────────────────────────────────────────────────────
 
 /**
  * Parse a .env file content into a key→value map.
@@ -45,14 +87,25 @@ export function parseDotEnv(content: string): Record<string, string> {
   return result;
 }
 
-/** Load .env from cwd and return parsed values. Silently returns {} on failure. */
-function loadDotEnv(): Record<string, string> {
+/** Load .env from a directory. Silently returns {} on failure. */
+function loadDotEnvFrom(dir: string): Record<string, string> {
   try {
-    const p = join(process.cwd(), ".env");
+    const p = join(dir, ".env");
     if (!existsSync(p)) return {};
     return parseDotEnv(readFileSync(p, "utf-8"));
   } catch {
     return {};
+  }
+}
+
+/** Read glw.config.json from a directory. Throws on invalid JSON. */
+function readConfigFileFrom(dir: string): ConfigFile {
+  const p = join(dir, CONFIG_FILE);
+  if (!existsSync(p)) return {};
+  try {
+    return JSON.parse(readFileSync(p, "utf-8")) as ConfigFile;
+  } catch {
+    throw new Error(`Failed to parse ${p}. Ensure it is valid JSON.`);
   }
 }
 
@@ -61,55 +114,49 @@ export function loadConfig(
   requireProject = true
 ): Config {
   const cwd = process.cwd();
-  const configPath = join(cwd, CONFIG_FILE);
+  const globalOn = isGlobalMode();
+  const gdir = globalDir();
 
-  let fileConfig: ConfigFile = {};
-  if (existsSync(configPath)) {
-    try {
-      fileConfig = JSON.parse(readFileSync(configPath, "utf-8")) as ConfigFile;
-    } catch {
-      throw new Error(
-        `Failed to parse ${CONFIG_FILE}. Ensure it is valid JSON.`
-      );
-    }
-  }
+  const localFile = readConfigFileFrom(cwd);
+  const globalFile = globalOn ? readConfigFileFrom(gdir) : {};
+  const localEnv = loadDotEnvFrom(cwd);
+  const globalEnv = globalOn ? loadDotEnvFrom(gdir) : {};
 
-  // .env fallback: real process.env wins, .env wins over glw.config.json
-  const dotenv = loadDotEnv();
+  // Priority: process.env > local .env > global .env; local file > global file
   const env = (key: string): string | undefined =>
-    process.env[key] ?? dotenv[key];
+    process.env[key] ?? localEnv[key] ?? globalEnv[key];
+  const file = <K extends keyof ConfigFile>(key: K): ConfigFile[K] =>
+    localFile[key] ?? globalFile[key];
 
-  const url = env("GITLAB_URL") ?? fileConfig.url;
+  const globalHint = globalOn
+    ? `Global mode is ON — files are also read from ${gdir}.`
+    : `Tip: "glw global on" enables a shared config in ${gdir}.`;
+
+  const url = env("GITLAB_URL") ?? file("url");
   if (!url) {
     throw new Error(
       `GitLab URL not configured.\n` +
         `Set GITLAB_URL env var (or in .env) or add "url" to ${CONFIG_FILE}.\n` +
+        `${globalHint}\n` +
         `Run: glw init`
     );
   }
 
-  const tokenEnvName =
-    fileConfig.tokenEnv && fileConfig.tokenEnv.trim()
-      ? fileConfig.tokenEnv.trim()
-      : "GITLAB_TOKEN";
+  const tokenEnvName = file("tokenEnv")?.trim() || "GITLAB_TOKEN";
 
-  const token =
-    env("GITLAB_TOKEN") ??
-    (env(tokenEnvName) ?? fileConfig.token);
+  const token = env("GITLAB_TOKEN") ?? env(tokenEnvName) ?? file("token");
 
   if (!token) {
     throw new Error(
       `GitLab access token not configured.\n` +
         `Set the ${tokenEnvName} env var (or in .env), or add "token" to ${CONFIG_FILE}.\n` +
+        `${globalHint}\n` +
         `Create a Personal Access Token at: ${url}/-/user_settings/personal_access_tokens\n` +
         `Required scope: api`
     );
   }
 
-  const project =
-    projectOverride ??
-    env("GITLAB_PROJECT") ??
-    fileConfig.project;
+  const project = projectOverride ?? env("GITLAB_PROJECT") ?? file("project");
 
   if (!project) {
     if (!requireProject) {
@@ -131,33 +178,32 @@ export function loadConfig(
 
 /**
  * Persist the default project into glw.config.json (merging with existing
- * fields; creates the file if absent). Returns the config file path.
+ * fields; creates the file if absent). Local config wins if present in cwd;
+ * otherwise, when global mode is on, writes to the global config.
+ * Returns the config file path written.
  */
 export function saveConfigProject(fullPath: string): string {
-  const configPath = join(process.cwd(), CONFIG_FILE);
+  const localPath = join(process.cwd(), CONFIG_FILE);
+  const useGlobal = !existsSync(localPath) && isGlobalMode();
+  const dir = useGlobal ? globalDir() : process.cwd();
+  const configPath = join(dir, CONFIG_FILE);
 
-  let fileConfig: ConfigFile = {};
-  if (existsSync(configPath)) {
-    try {
-      fileConfig = JSON.parse(readFileSync(configPath, "utf-8")) as ConfigFile;
-    } catch {
-      throw new Error(
-        `Failed to parse ${CONFIG_FILE}. Ensure it is valid JSON.`
-      );
-    }
-  } else {
+  let fileConfig: ConfigFile = readConfigFileFrom(dir);
+  if (!existsSync(configPath)) {
     if (process.env["GITLAB_URL"]) fileConfig.url = process.env["GITLAB_URL"];
     fileConfig.tokenEnv = "GITLAB_TOKEN";
   }
 
   fileConfig.project = fullPath;
+  if (useGlobal) mkdirSync(dir, { recursive: true });
   writeFileSync(configPath, JSON.stringify(fileConfig, null, 2) + "\n");
   return configPath;
 }
 
-export function writeConfigTemplate(): void {
-  const cwd = process.cwd();
-  const configPath = join(cwd, CONFIG_FILE);
+/** Create a glw.config.json template in `dir` (cwd by default) if absent. */
+export function writeConfigTemplate(dir = process.cwd()): void {
+  mkdirSync(dir, { recursive: true });
+  const configPath = join(dir, CONFIG_FILE);
 
   if (existsSync(configPath)) {
     // No longer throws — init with a token arg should still work
@@ -174,11 +220,12 @@ export function writeConfigTemplate(): void {
 }
 
 /**
- * Write or update GITLAB_TOKEN= in .env in cwd.
+ * Write or update GITLAB_TOKEN= in .env in `dir` (cwd by default).
  * Preserves all other lines; creates the file if absent.
  */
-export function writeDotEnvToken(token: string): void {
-  const envPath = join(process.cwd(), ".env");
+export function writeDotEnvToken(token: string, dir = process.cwd()): void {
+  mkdirSync(dir, { recursive: true });
+  const envPath = join(dir, ".env");
   let lines: string[] = [];
   if (existsSync(envPath)) {
     lines = readFileSync(envPath, "utf-8").split(/\r?\n/);
@@ -193,4 +240,23 @@ export function writeDotEnvToken(token: string): void {
     lines.push(newLine);
   }
   writeFileSync(envPath, lines.join("\n") + "\n");
+}
+
+/** Copy local (cwd) glw.config.json and .env into the global dir if the
+ *  global dir doesn't have them yet. Returns the list of copied file names. */
+export function migrateLocalToGlobal(): string[] {
+  const cwd = process.cwd();
+  const gdir = globalDir();
+  mkdirSync(gdir, { recursive: true });
+  const copied: string[] = [];
+
+  for (const name of [CONFIG_FILE, ".env"]) {
+    const src = join(cwd, name);
+    const dst = join(gdir, name);
+    if (existsSync(src) && !existsSync(dst)) {
+      writeFileSync(dst, readFileSync(src));
+      copied.push(name);
+    }
+  }
+  return copied;
 }

@@ -6,20 +6,42 @@ the CLI. Global flags (where supported): `--project <ref>`, `--json`,
 `gitlab.example.com`).
 
 Config priority: `--project` flag > env (`GITLAB_URL`, `GITLAB_TOKEN`,
-`GITLAB_PROJECT`) > `.env` in cwd > `glw.config.json`. `NO_COLOR` disables color.
+`GITLAB_PROJECT`) > `.env` in cwd > `glw.config.json` in cwd > global `.env` >
+global `glw.config.json`. The global layer (dir: `%APPDATA%/glw` on Windows,
+`~/.config/glw` on POSIX) applies only when enabled via `glw global on`.
+`NO_COLOR` disables color.
 
 ---
 
-## init — `glw init [token]` (alias `i`)
+## init — `glw init [token] [--global]` (alias `i`)
 
 Creates `glw.config.json` template in cwd (left untouched if it already exists).
 If a token arg is given, writes `GITLAB_TOKEN=<token>` to `.env` in cwd (creates
-or replaces the line) and prints the masked token (first 8 chars + `...`). No
-network. Does NOT require a configured project.
+or replaces the line) and prints the masked token (first 8 chars + `...`). With
+`--global`, both files go to the global dir instead of cwd. No network. Does NOT
+require a configured project.
 
 ```bash
-glw init                       # create config template only
-glw init glpat-xxxxxxxxxxxx     # also write token to .env
+glw init                             # create config template only
+glw init glpat-xxxxxxxxxxxx          # also write token to .env
+glw init glpat-xxxxxxxxxxxx --global # set up the shared global environment
+```
+
+---
+
+## global — `glw global <on|off|status>`
+
+Toggles the shared global environment. When ON, glw also reads `.env` and
+`glw.config.json` from the global dir; **local files in cwd still win**
+(git-style local > global). `glw use` writes to the global config only when
+cwd has no local config and the mode is on. `on` copies local
+`glw.config.json`/`.env` into the empty global dir. `status` (or no arg)
+prints the mode, the dir, and which global files exist.
+
+```bash
+glw global on
+glw global status
+glw global off
 ```
 
 `glw.config.json` shape:
@@ -43,7 +65,7 @@ glw whoami --json
 ## projects — `glw projects [flags]` (alias `p`)
 
 Lists projects you are a member of (id, full path, name). Current project marked
-`*`. Caches paths to `~/.glw/projects.json` on success. No project required.
+`*`. Caches paths to `<global dir>/projects.json` on success. No project required.
 
 | Flag | Default | Meaning |
 |---|---|---|

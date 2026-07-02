@@ -43,7 +43,9 @@ self-correct.
 
 The CLI reads config in priority order: `--project` flag > env
 (`GITLAB_URL`/`GITLAB_TOKEN`/`GITLAB_PROJECT`) > `.env` in cwd >
-`glw.config.json`. Exact errors:
+`glw.config.json` in cwd > global `.env`/`glw.config.json` from `%APPDATA%/glw`
+(POSIX: `~/.config/glw`) — the global layer applies only when enabled via
+`glw global on` (check: `glw global status`). Exact errors:
 
 - `GitLab URL not configured.` → user must set `GITLAB_URL` or `url` in
   `glw.config.json`; suggest `glw init`. Do not guess a URL.
