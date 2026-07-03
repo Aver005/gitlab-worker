@@ -23,7 +23,8 @@ Fallback if `glw` is not on PATH: `bun run src/index.ts <command> [flags]` from
 the repo root. Everything below uses `glw`; substitute the fallback verbatim.
 
 Aliases: `i`=init, `cfg`=config, `s`=search, `p`=projects, `l`/`ls`=list,
-`v`=view, `cr`=create, `u`=update, `co`=comment. (`use` has no alias.)
+`v`=view, `cr`=create, `u`=update, `co`=comment, `ln`=link. (`use` has no
+alias.)
 
 ## 1. Preflight (run once per session before mutations)
 
@@ -82,7 +83,8 @@ Protocol — never `--yes` blindly on an unpreviewed filter:
 
 For anything you must reason over (counts, iids, statuses, assignees), pass
 `--json`. Human output is colored and for showing the user only; do not parse
-it. Supported on: `whoami`, `projects`, `search`, `list`, `view`, `create`.
+it. Supported on: `whoami`, `projects`, `search`, `list`, `view`, `create`,
+`link`, `parent`.
 
 JSON shape (verified against `src/api.ts`):
 
@@ -98,6 +100,11 @@ JSON shape (verified against `src/api.ts`):
   - `WEIGHT` → `weight` (number or `null`)
   - `START_AND_DUE_DATE` → `startDate`, `dueDate` (or `null`)
   - `TIME_TRACKING` → `timeEstimate`, `totalTimeSpent` (seconds)
+  - `HIERARCHY` → `hasParent`, `hasChildren`, `parent` (`{id,iid,title,state}`
+    or `null`), `children.nodes[]` (`{id,iid,title,state}`)
+  - `LINKED_ITEMS` → `blocked` (bool), `blockedByCount`, `blockingCount`
+    (this GitLab exposes counts only, not the linked list — read links from the
+    web UI or infer from the counts)
 
 To get an assignee's username: find the widget with `type == "ASSIGNEES"`, read
 `assignees.nodes[0].username`. `whoami --json` → `{id,username,name}`.
@@ -123,6 +130,16 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
   confidential note.
 - **Close/reopen**: `glw close <iid...>` (optional `--comment "..."`);
   `glw reopen <iid...>`.
+- **Link work items** (`glw link`): `glw link <iid> <target...> [--type
+  related|blocks|blocked-by] [--remove]`. Creates the relation **from** `<iid>`
+  **to** each target (`blocks` → `<iid>` blocks the targets; `blocked-by` → the
+  reverse); default `related`. `--remove` deletes the link (`--type` ignored).
+  Explicit iids only, no prompt. `#42` and `42` both accepted.
+- **Parent / children** (`glw parent`): `glw parent <child-iid...> --to
+  <parent-iid|none>`. Sets the parent of each child (that is how you "add
+  children" to an epic/parent); `--to none` detaches. Continues past per-item
+  failures, exits non-zero if any failed. Uses the hierarchy widget on
+  `workItemUpdate` under the hood.
 - **Search** (≥1 filter required): positional `text` = title AND description;
   `--name` title-only; `--body` description-only; `--start_time`/`--start`
   `YYYY-MM-DD` >=; multiple filters combine with **AND**; `--state
@@ -213,3 +230,11 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
 **F. "убери исполнителя и дедлайн у задачи 42"**
 1. `glw update 42 --assignee none --due none --yes`
 2. Confirm cleared.
+
+**G. "сделай задачи 4, 5, 6 подзадачами эпика 3"**
+1. `glw parent 4 5 6 --to 3`
+2. Report per-child success/failure; note non-zero exit if any `Failed #`.
+
+**H. "пометь, что задача 42 блокирует 43 и 44"**
+1. `glw link 42 43 44 --type blocks`
+2. Confirm the relation (from #42 to the targets).

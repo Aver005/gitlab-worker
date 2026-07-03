@@ -105,6 +105,26 @@ If the user provides issue text inline rather than a file, write it to a temp
 | "залогируй 30м с описанием code review" | `glw spend 42 30m --summary "code review"` |
 | "оценка 3 дня" | `glw estimate 42 3d` |
 
+## Links & hierarchy (связи и иерархия)
+
+Explicit iids only — no filter selection, no confirmation prompt (like `reopen`).
+`link` direction is FROM the first iid TO the targets.
+
+| Request (RU / EN) | Command |
+|---|---|
+| "свяжи 42 и 43", "relate 42 and 43" | `glw link 42 43` |
+| "42 блокирует 43 и 44", "42 blocks 43,44" | `glw link 42 43 44 --type blocks` |
+| "42 заблокирована задачей 43", "42 blocked by 43" | `glw link 42 43 --type blocked-by` |
+| "убери связь 42 и 43", "unlink 42 43" | `glw link 42 43 --remove` |
+| "сделай 4 подзадачей 3", "make 4 child of 3" | `glw parent 4 --to 3` |
+| "добавь 4,5,6 в эпик 3", "add 4,5,6 under 3" | `glw parent 4 5 6 --to 3` |
+| "отвяжи 4 от родителя", "detach 4" | `glw parent 4 --to none` |
+| "какой родитель / дети у 42" | `glw view 42 --json` → `HIERARCHY` widget |
+
+`glw view <iid>` shows the parent, children, and block counts. On this GitLab the
+`LINKED_ITEMS` widget returns counts only (`blocked`, `blockedByCount`,
+`blockingCount`), not the linked list.
+
 ## Closing / reopening single
 
 | Request | Command |

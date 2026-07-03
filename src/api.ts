@@ -12,6 +12,14 @@ export interface WorkItemNode {
   widgets: WidgetUnion[];
 }
 
+/** A lightweight work-item reference as returned inside the hierarchy widget. */
+export interface HierarchyRef {
+  id: string;
+  iid: string;
+  title: string;
+  state: string;
+}
+
 type WidgetUnion =
   | { type: "DESCRIPTION"; description: string }
   | {
@@ -25,7 +33,20 @@ type WidgetUnion =
   | { type: "STATUS"; status: { id: string; name: string } | null }
   | { type: "WEIGHT"; weight: number | null }
   | { type: "START_AND_DUE_DATE"; startDate: string | null; dueDate: string | null }
-  | { type: "TIME_TRACKING"; timeEstimate: number; totalTimeSpent: number };
+  | { type: "TIME_TRACKING"; timeEstimate: number; totalTimeSpent: number }
+  | {
+      type: "HIERARCHY";
+      hasParent: boolean;
+      hasChildren: boolean;
+      parent: HierarchyRef | null;
+      children: { nodes: HierarchyRef[] };
+    }
+  | {
+      type: "LINKED_ITEMS";
+      blocked: boolean;
+      blockedByCount: number;
+      blockingCount: number;
+    };
 
 export interface WorkItemType {
   id: string;
@@ -119,6 +140,49 @@ export function getTimeTracking(
   return { timeEstimate: w?.timeEstimate ?? 0, totalTimeSpent: w?.totalTimeSpent ?? 0 };
 }
 
+export function getHierarchy(item: WorkItemNode): {
+  hasParent: boolean;
+  hasChildren: boolean;
+  parent: HierarchyRef | null;
+  children: HierarchyRef[];
+} {
+  const w = item.widgets.find((x) => x.type === "HIERARCHY") as
+    | {
+        type: "HIERARCHY";
+        hasParent: boolean;
+        hasChildren: boolean;
+        parent: HierarchyRef | null;
+        children: { nodes: HierarchyRef[] };
+      }
+    | undefined;
+  return {
+    hasParent: w?.hasParent ?? false,
+    hasChildren: w?.hasChildren ?? false,
+    parent: w?.parent ?? null,
+    children: w?.children.nodes ?? [],
+  };
+}
+
+export function getLinkedInfo(item: WorkItemNode): {
+  blocked: boolean;
+  blockedByCount: number;
+  blockingCount: number;
+} {
+  const w = item.widgets.find((x) => x.type === "LINKED_ITEMS") as
+    | {
+        type: "LINKED_ITEMS";
+        blocked: boolean;
+        blockedByCount: number;
+        blockingCount: number;
+      }
+    | undefined;
+  return {
+    blocked: w?.blocked ?? false,
+    blockedByCount: w?.blockedByCount ?? 0,
+    blockingCount: w?.blockingCount ?? 0,
+  };
+}
+
 // ─── GraphQL fragments ────────────────────────────────────────────────────────
 
 const WORK_ITEM_WIDGETS_FRAGMENT = `
@@ -131,6 +195,13 @@ const WORK_ITEM_WIDGETS_FRAGMENT = `
     ... on WorkItemWidgetWeight { weight }
     ... on WorkItemWidgetStartAndDueDate { startDate dueDate }
     ... on WorkItemWidgetTimeTracking { timeEstimate totalTimeSpent }
+    ... on WorkItemWidgetHierarchy {
+      hasParent
+      hasChildren
+      parent { id iid title state }
+      children { nodes { id iid title state } }
+    }
+    ... on WorkItemWidgetLinkedItems { blocked blockedByCount blockingCount }
   }
 `;
 
@@ -700,6 +771,11 @@ interface WidgetInput {
     timeEstimate?: string;
     timelog?: { timeSpent: string; summary?: string };
   };
+  hierarchyWidget?: {
+    // Set the parent work item (null clears it) and/or add children.
+    parentId?: string | null;
+    childrenIds?: string[];
+  };
 }
 
 export interface WorkItemCreateInput extends WidgetInput {
@@ -815,6 +891,114 @@ export async function createNote(
       `Failed to create note: ${data.createNote.errors.join("; ")}`
     );
   }
+}
+
+// ─── Linked items (related / blocks / blocked-by) ─────────────────────────────
+// GitLab exposes these as dedicated mutations (not widgets on workItemUpdate).
+// linkType describes the relation FROM `id` TO each item in `workItemsIds`.
+
+export type LinkType = "RELATED" | "BLOCKS" | "BLOCKED_BY";
+
+interface LinkedItemsPayload {
+  workItem: MutationWorkItem | null;
+  errors: string[];
+  message: string | null;
+}
+
+export async function addLinkedItems(
+  config: Config,
+  id: string,
+  workItemsIds: string[],
+  linkType: LinkType
+): Promise<MutationWorkItem> {
+  const data = await gql<{ workItemAddLinkedItems: LinkedItemsPayload }>(
+    config,
+    `mutation ($input: WorkItemAddLinkedItemsInput!) {
+      workItemAddLinkedItems(input: $input) {
+        workItem { id iid title state webUrl }
+        errors
+        message
+      }
+    }`,
+    { input: { id, workItemsIds, linkType } }
+  );
+
+  const res = data.workItemAddLinkedItems;
+  if (res.errors.length > 0) {
+    throw new Error(`Failed to link work items: ${res.errors.join("; ")}`);
+  }
+  if (!res.workItem) {
+    throw new Error(res.message || `Linking work items returned no data`);
+  }
+  return res.workItem;
+}
+
+export async function removeLinkedItems(
+  config: Config,
+  id: string,
+  workItemsIds: string[]
+): Promise<MutationWorkItem> {
+  const data = await gql<{ workItemRemoveLinkedItems: LinkedItemsPayload }>(
+    config,
+    `mutation ($input: WorkItemRemoveLinkedItemsInput!) {
+      workItemRemoveLinkedItems(input: $input) {
+        workItem { id iid title state webUrl }
+        errors
+        message
+      }
+    }`,
+    { input: { id, workItemsIds } }
+  );
+
+  const res = data.workItemRemoveLinkedItems;
+  if (res.errors.length > 0) {
+    throw new Error(`Failed to unlink work items: ${res.errors.join("; ")}`);
+  }
+  if (!res.workItem) {
+    throw new Error(res.message || `Unlinking work items returned no data`);
+  }
+  return res.workItem;
+}
+
+// ─── Relation input parsers (pure — unit-tested) ──────────────────────────────
+
+/**
+ * Parse a user-supplied link-type into the GraphQL enum.
+ * Accepts friendly spellings (spaces/underscores/hyphens interchangeable).
+ */
+export function parseLinkType(input: string): LinkType {
+  const s = input.trim().toLowerCase().replace(/[\s_]+/g, "-");
+  switch (s) {
+    case "related":
+    case "relates":
+    case "relate":
+    case "rel":
+      return "RELATED";
+    case "blocks":
+    case "block":
+    case "blocking":
+      return "BLOCKS";
+    case "blocked-by":
+    case "blockedby":
+    case "is-blocked-by":
+    case "blocked":
+      return "BLOCKED_BY";
+    default:
+      throw new Error(
+        `Invalid link type "${input}". Use: related, blocks, blocked-by`
+      );
+  }
+}
+
+/** Normalize an issue reference: strip a leading "#", trim, require digits. */
+export function normalizeIid(input: string): string {
+  const s = input.trim().replace(/^#/, "");
+  if (!/^\d+$/.test(s)) {
+    throw new Error(
+      `Invalid issue number "${input}". Expected a number like 42 or #42`
+    );
+  }
+  return s;
 }
 
 // ─── Duration validation ──────────────────────────────────────────────────────

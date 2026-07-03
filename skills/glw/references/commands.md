@@ -312,6 +312,53 @@ glw reopen 42 43 44
 
 ---
 
+## link — `glw link <iid> <target-iid...> [--type <t>] [--remove] [--json]` (alias `ln`)
+
+Creates (or with `--remove` deletes) a linked-items relationship **from** `<iid>`
+**to** each target. Operates on explicit iids only — no filter selection, no
+confirmation prompt (like `reopen`/`estimate`). A leading `#` on any iid is
+accepted (`#42` == `42`).
+
+| Arg/Flag | Default | Meaning |
+|---|---|---|
+| `<iid>` (positional) | — | anchor work item |
+| `<target-iid...>` (positional) | — | one or more items to link to `<iid>` |
+| `--type <t>` | `related` | relation from `<iid>` to each target: `related` \| `blocks` \| `blocked-by` (spellings tolerant: `rel`, `block`, `blocked_by`, …) |
+| `--remove` | — | remove the link instead of creating it (`--type` ignored) |
+| `--json` | — | JSON: `{action,linkType,workItem,targets[]}` |
+| `--project <path>` | — | override project |
+
+```bash
+glw link 42 43                     # 42 related to 43
+glw link 42 43 44 --type blocks    # 42 blocks 43 and 44
+glw link 42 43 --type blocked-by   # 42 is blocked by 43
+glw link 42 43 --remove            # remove the link between 42 and 43
+```
+
+---
+
+## parent — `glw parent <iid...> --to <parent-iid|none> [--json]`
+
+Sets or clears the **parent** (hierarchy widget) of one or more child work items.
+Setting the same parent on several children is how you "add children" to a
+parent/epic. Continues past a per-item failure and exits non-zero if any failed
+(like bulk `update`). No confirmation prompt; explicit iids only.
+
+| Arg/Flag | Default | Meaning |
+|---|---|---|
+| `<iid...>` (positional) | — | child work item(s) to reparent |
+| `--to <n\|none>` | — (required) | parent iid, or `none` to detach |
+| `--json` | — | JSON: `{action,parent,children[]}` |
+| `--project <path>` | — | override project |
+
+```bash
+glw parent 4 --to 3          # make #4 a child of #3
+glw parent 4 5 6 --to 3      # add #4, #5, #6 as children of #3
+glw parent 4 --to none       # detach #4 from its parent
+```
+
+---
+
 ## comment — `glw comment <iid> [text] [--file <f>] [--internal]` (alias `co`)
 
 Adds a comment. Body from positional `text` or `--file`. `--internal` = internal

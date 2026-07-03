@@ -3,6 +3,25 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версионирование — [SemVer](https://semver.org/lang/ru/).
 
+## [1.1.0] — 2026-07-03
+
+### Добавлено
+
+- `link <iid> <target...>` (алиас `ln`) — связи между задачами: `related`
+  (по умолчанию), `blocks`, `blocked-by`; `--remove` убирает связь. Направление —
+  ОТ `<iid>` К целям. Через мутации `workItemAddLinkedItems` /
+  `workItemRemoveLinkedItems`
+- `parent <iid...> --to <parent-iid|none>` — иерархия: установка/смена родителя
+  (и, тем самым, добавление детей эпику), `--to none` отвязывает. Через
+  `hierarchyWidget` в `workItemUpdate`
+- `glw view` теперь показывает родителя, детей и счётчики блокировок; `--json`
+  у `view` включает виджеты `HIERARCHY` и `LINKED_ITEMS`
+- `--json` у `link` и `parent` для машиночитаемого вывода
+- Чистые функции `parseLinkType` / `normalizeIid` (принимает `#42` и `42`) с
+  юнит-тестами
+
+[1.1.0]: https://github.com/Aver005/gitlab-worker/releases/tag/v1.1.0
+
 ## [1.0.0] — 2026-07-02
 
 Первый стабильный релиз ⚡

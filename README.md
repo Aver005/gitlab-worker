@@ -11,7 +11,7 @@
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3-f9f1e1?logo=bun&logoColor=f9f1e1&labelColor=14151a)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white&labelColor=14151a)](https://www.typescriptlang.org)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-0-22c55e?labelColor=14151a)](package.json)
-[![Tests](https://img.shields.io/badge/tests-66%20passed-22c55e?labelColor=14151a)](tests)
+[![Tests](https://img.shields.io/badge/tests-74%20passed-22c55e?labelColor=14151a)](tests)
 [![GitLab GraphQL](https://img.shields.io/badge/GitLab-GraphQL%20Work%20Items-fc6d26?logo=gitlab&labelColor=14151a)](https://docs.gitlab.com/ee/api/graphql/)
 [![Agent Skill](https://img.shields.io/badge/skills.sh-glw-8b5cf6?labelColor=14151a)](https://skills.sh)
 
@@ -48,6 +48,7 @@ Updated #47 refactor: типизация ответов GraphQL
 |---|---|
 | 📝 **Задачи из markdown** | Пишете обычный `.md` с YAML-шапкой — получаете оформленную задачу |
 | 🔧 **Все поля задачи** | Название, описание, статус, исполнитель, метки, вес, даты, время |
+| 🔗 **Связи и иерархия** | Родитель/дети и связи related / blocks / blocked-by между задачами |
 | 🔥 **Массовые операции** | Выборка фильтром → превью → одно подтверждение → готово |
 | ⏱️ **Учёт времени** | `glw estimate 42 2h`, `glw spend 42 1h30m --summary "ревью"` |
 | 🔍 **Умный поиск** | По названию, описанию, датам — фильтры комбинируются |
@@ -133,6 +134,23 @@ glw estimate 42 2h
 glw spend 42 1h30m --summary "code review"
 ```
 
+**Связи и иерархия:**
+
+```bash
+# Иерархия (родитель/дети) — nest issues под эпик/родителя
+glw parent 4 --to 3            # сделать #4 потомком #3
+glw parent 4 5 6 --to 3        # добавить #4, #5, #6 как детей #3
+glw parent 4 --to none         # отвязать #4 от родителя
+
+# Связи между задачами
+glw link 42 43                 # #42 связана с #43 (related)
+glw link 42 43 44 --type blocks       # #42 блокирует #43 и #44
+glw link 42 43 --type blocked-by      # #42 заблокирована задачей #43
+glw link 42 43 --remove               # убрать связь между #42 и #43
+```
+
+`glw view 42` показывает родителя, детей и счётчики блокировок.
+
 **Искать:**
 
 ```bash
@@ -188,6 +206,8 @@ npx skills add Aver005/gitlab-worker
 | `glw comment <iid>` | `co` | Добавить комментарий |
 | `glw close [iid...]` | | Закрыть задачи |
 | `glw reopen <iid...>` | | Переоткрыть задачи |
+| `glw link <iid> <tgt...>` | `ln` | Связи между задачами (related/blocks/blocked-by) |
+| `glw parent <iid...> --to` | | Родитель/дети (иерархия) |
 | `glw estimate <iid> <dur>` | | Оценка времени |
 | `glw spend <iid> <dur>` | | Залогировать время |
 | `glw completion <shell>` | | Скрипт автодополнения |

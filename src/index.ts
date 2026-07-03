@@ -34,6 +34,10 @@ import {
   createWorkItem,
   updateWorkItem,
   createNote,
+  addLinkedItems,
+  removeLinkedItems,
+  parseLinkType,
+  normalizeIid,
   validateDuration,
   getAssignees,
   getLabels,
@@ -41,8 +45,11 @@ import {
   getWeight,
   getDates,
   getTimeTracking,
+  getHierarchy,
+  getLinkedInfo,
   getDescription,
   matchesSearch,
+  type LinkType,
   type SearchCriteria,
   type WorkItemUpdateInput,
   type WorkItemCreateInput,
@@ -86,13 +93,15 @@ Commands:
   comment <iid> [text]  Add a comment to a work item
   close [iid...]        Close one or more work items
   reopen <iid...>       Reopen work items
+  link <iid> <tgt...>   Link work items (related/blocks/blocked-by)
+  parent <iid...> --to  Set or clear the parent (hierarchy)
   estimate <iid> <dur>  Set time estimate (e.g. 2h, 1h30m)
   spend <iid> <dur>     Log time spent
   completion <shell>    Print shell completion script (bash|zsh|powershell)
 
 Aliases:
   i→init  cfg→config  s→search  p→projects  l/ls→list  v→view
-  cr→create  u→update  co→comment
+  cr→create  u→update  co→comment  ln→link
 
 Global flags:
   --project <ref>     Override project: full path (group/project) or a short
@@ -116,6 +125,7 @@ const ALIASES: Record<string, string> = {
   v: "view",
   l: "list",
   ls: "list",
+  ln: "link",
 };
 
 // ─── Error handling ───────────────────────────────────────────────────────────
@@ -1007,6 +1017,8 @@ Show details for a work item.
   const weight = getWeight(item);
   const dates = getDates(item);
   const timeTracking = getTimeTracking(item);
+  const hierarchy = getHierarchy(item);
+  const linked = getLinkedInfo(item);
   const description = getDescription(item);
 
   console.log(`\n${bold(item.title)}`);
@@ -1033,6 +1045,21 @@ Show details for a work item.
     rows.push(["Estimate", secondsToHuman(timeTracking.timeEstimate)]);
   if (timeTracking.totalTimeSpent)
     rows.push(["Time Spent", secondsToHuman(timeTracking.totalTimeSpent)]);
+
+  if (hierarchy.parent)
+    rows.push([
+      "Parent",
+      `${cyan("#" + hierarchy.parent.iid)} ${hierarchy.parent.title}`,
+    ]);
+  if (hierarchy.children.length > 0)
+    rows.push([
+      `Children (${hierarchy.children.length})`,
+      hierarchy.children.map((c) => cyan("#" + c.iid)).join(", "),
+    ]);
+  if (linked.blockingCount > 0)
+    rows.push(["Blocks", String(linked.blockingCount)]);
+  if (linked.blockedByCount > 0)
+    rows.push(["Blocked by", String(linked.blockedByCount)]);
 
   printTable(rows);
 
@@ -1607,6 +1634,203 @@ async function cmdReopen(args: string[]): Promise<void> {
   if (anyFailed) process.exit(1);
 }
 
+// link
+async function cmdLink(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      project: { type: "string" },
+      type: { type: "string" },
+      remove: { type: "boolean" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+    allowPositionals: true,
+    strict: false,
+  });
+
+  if (values["help"]) {
+    console.log(`
+glw link <iid> <target-iid...> [--type related|blocks|blocked-by] [--remove] [--json]
+
+Link work items together (related / blocks / blocked-by). Creates the link from
+<iid> to each target; --remove deletes it instead.
+
+Arguments:
+  <iid>              The anchor work item
+  <target-iid...>    One or more work items to link to <iid>
+
+Flags:
+  --type <t>         Relationship from <iid> to each target:
+                     related (default) | blocks | blocked-by
+  --remove           Remove the link(s) instead of creating them
+                     (--type is ignored on removal)
+  --json             JSON output
+  --project <path>   Override project
+
+Examples:
+  glw link 42 43                     # 42 is related to 43
+  glw link 42 43 44 --type blocks    # 42 blocks 43 and 44
+  glw link 42 43 --type blocked-by   # 42 is blocked by 43
+  glw link 42 43 --remove            # remove the link between 42 and 43
+`);
+    return;
+  }
+
+  const anchorRaw = positionals[0];
+  const targetsRaw = positionals.slice(1);
+  if (!anchorRaw || targetsRaw.length === 0) {
+    die("Usage: glw link <iid> <target-iid...> [--type related|blocks|blocked-by] [--remove]");
+  }
+
+  const remove = getBoolFlag(values, "remove");
+  // Parse the link type up front so a bad value fails before any network call.
+  const linkType: LinkType = remove
+    ? "RELATED"
+    : parseLinkType(getFlag(values, "type") ?? "related");
+
+  const config = await resolveConfig(getFlag(values, "project"));
+
+  const anchorIid = normalizeIid(anchorRaw);
+  const targetIids = targetsRaw.map(normalizeIid);
+
+  const anchor = await getWorkItemByIid(config, anchorIid);
+  const targets = await Promise.all(
+    targetIids.map((iid) => getWorkItemByIid(config, iid))
+  );
+  const targetGids = targets.map((t) => t.id);
+
+  const result = remove
+    ? await removeLinkedItems(config, anchor.id, targetGids)
+    : await addLinkedItems(config, anchor.id, targetGids, linkType);
+
+  if (values["json"]) {
+    console.log(
+      JSON.stringify({
+        action: remove ? "unlink" : "link",
+        linkType: remove ? null : linkType,
+        workItem: { id: result.id, iid: result.iid, title: result.title },
+        targets: targets.map((t) => ({ id: t.id, iid: t.iid, title: t.title })),
+      })
+    );
+    return;
+  }
+
+  const targetList = targets.map((t) => cyan("#" + t.iid)).join(", ");
+  if (remove) {
+    console.log(
+      `${yellow("Unlinked")} ${cyan("#" + anchor.iid)} ${dim("from")} ${targetList}`
+    );
+  } else {
+    const verb =
+      linkType === "RELATED"
+        ? "related to"
+        : linkType === "BLOCKS"
+          ? "blocks"
+          : "blocked by";
+    console.log(
+      `${green("Linked")} ${cyan("#" + anchor.iid)} ${dim(verb)} ${targetList}`
+    );
+  }
+}
+
+// parent
+async function cmdParent(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      project: { type: "string" },
+      to: { type: "string" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+    allowPositionals: true,
+    strict: false,
+  });
+
+  if (values["help"]) {
+    console.log(`
+glw parent <iid...> --to <parent-iid|none> [--json]
+
+Set or clear the parent of one or more work items (hierarchy). Use it to nest
+issues under a parent/epic, or to reparent/detach them. Setting the same parent
+on several items is how you "add children" to that parent.
+
+Arguments:
+  <iid...>           Child work item(s) to reparent
+
+Flags:
+  --to <n|none>      Parent work item number, or "none" to remove the parent
+  --json             JSON output
+  --project <path>   Override project
+
+Examples:
+  glw parent 4 --to 3          # make #4 a child of #3
+  glw parent 4 5 6 --to 3      # add #4, #5, #6 as children of #3
+  glw parent 4 --to none       # detach #4 from its parent
+`);
+    return;
+  }
+
+  if (positionals.length === 0) {
+    die("Usage: glw parent <iid...> --to <parent-iid|none>");
+  }
+
+  const to = getFlag(values, "to");
+  if (to === undefined) {
+    die('Missing --to. Use: glw parent <iid...> --to <parent-iid|none>');
+  }
+
+  const config = await resolveConfig(getFlag(values, "project"));
+
+  const clear = to.trim().toLowerCase() === "none";
+  let parentId: string | null = null;
+  let parentLabel = "(none)";
+  if (!clear) {
+    const parent = await getWorkItemByIid(config, normalizeIid(to));
+    parentId = parent.id;
+    parentLabel = "#" + parent.iid;
+  }
+
+  const childIids = positionals.map(normalizeIid);
+  const results: Array<{ id: string; iid: string; title: string }> = [];
+  let anyFailed = false;
+
+  for (const iid of childIids) {
+    try {
+      const child = await getWorkItemByIid(config, iid);
+      const updated = await updateWorkItem(config, {
+        id: child.id,
+        hierarchyWidget: { parentId },
+      });
+      results.push({ id: updated.id, iid: updated.iid, title: updated.title });
+      if (!values["json"]) {
+        console.log(
+          clear
+            ? `${yellow("Cleared parent")} of ${cyan("#" + updated.iid)} ${bold(updated.title)}`
+            : `${green("Set parent")} of ${cyan("#" + updated.iid)} ${dim("→")} ${cyan(parentLabel)} ${bold(updated.title)}`
+        );
+      }
+    } catch (err) {
+      anyFailed = true;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(red(`Failed #${iid}: ${msg}`));
+    }
+  }
+
+  if (values["json"]) {
+    console.log(
+      JSON.stringify({
+        action: clear ? "clear-parent" : "set-parent",
+        parent: clear ? null : parentLabel,
+        children: results,
+      })
+    );
+  }
+
+  if (anyFailed) process.exit(1);
+}
+
 // estimate
 async function cmdEstimate(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -1705,9 +1929,10 @@ Completes command names and project paths after "use" / "--project"
 
   const subcommands = [
     "init", "config", "global", "whoami", "projects", "use", "search", "create", "list",
-    "view", "update", "comment", "close", "reopen", "estimate", "spend", "completion",
+    "view", "update", "comment", "close", "reopen", "link", "parent", "estimate", "spend",
+    "completion",
     // aliases
-    "i", "cfg", "s", "p", "co", "cr", "u", "v", "l", "ls",
+    "i", "cfg", "s", "p", "co", "cr", "u", "v", "l", "ls", "ln",
   ].join(" ");
 
   if (shell === "bash") {
@@ -1860,6 +2085,14 @@ async function main(): Promise<void> {
 
       case "reopen":
         await cmdReopen(rest);
+        break;
+
+      case "link":
+        await cmdLink(rest);
+        break;
+
+      case "parent":
+        await cmdParent(rest);
         break;
 
       case "estimate":
