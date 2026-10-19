@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { extname } from "node:path";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { extname, join } from "node:path";
 
 export interface IssueFileData {
   title?: string;
@@ -92,7 +92,7 @@ interface FrontmatterResult {
  * one recognized key; otherwise the whole content (including ---blocks) is
  * returned as body (handles GitLab issue-template metadata headers).
  */
-function extractFrontmatter(content: string): FrontmatterResult {
+function extractFrontmatter(content: string, source: string): FrontmatterResult {
   const lines = content.split("\n");
 
   // Must start with ---
@@ -145,7 +145,7 @@ function extractFrontmatter(content: string): FrontmatterResult {
   // Warn about unknown keys (only if frontmatter was recognized)
   for (const k of unknownKeys) {
     process.stderr.write(
-      `glw: warning: unknown frontmatter key "${k}" — ignored\n`
+      `glw: warning: ${source}: unknown frontmatter key "${k}" — ignored\n`
     );
   }
 
@@ -185,9 +185,10 @@ function asNumber(v: string | number | boolean | string[]): number {
  */
 function parseMarkdownOrText(
   content: string,
-  ext: string
+  ext: string,
+  source: string
 ): IssueFileData {
-  const { data, body, hadRecognizedFrontmatter } = extractFrontmatter(content);
+  const { data, body, hadRecognizedFrontmatter } = extractFrontmatter(content, source);
 
   const result: IssueFileData = {};
 
@@ -289,6 +290,32 @@ function parseJson(content: string): IssueFileData {
   return result;
 }
 
+const ISSUE_FILE_EXTS = new Set([".md", ".markdown", ".txt", ".json"]);
+
+/** Directories expand to their top-level issue files in natural order; plain paths pass through. */
+export function expandIssueFiles(paths: string[]): { files: string[]; fromDir: boolean } {
+  const files: string[] = [];
+  let fromDir = false;
+  for (const p of paths) {
+    let isDir: boolean;
+    try {
+      isDir = statSync(p).isDirectory();
+    } catch {
+      throw new Error(`Cannot read file: ${p}`);
+    }
+    if (!isDir) {
+      files.push(p);
+      continue;
+    }
+    fromDir = true;
+    const names = readdirSync(p)
+      .filter((n) => ISSUE_FILE_EXTS.has(extname(n).toLowerCase()) && statSync(join(p, n)).isFile())
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    files.push(...names.map((n) => join(p, n)));
+  }
+  return { files: [...new Set(files)], fromDir };
+}
+
 /** Defined override values win over the file; extra labels are appended to the file's. */
 export function applyOverrides(
   data: IssueFileData,
@@ -318,5 +345,5 @@ export function parseIssueFile(filePath: string): IssueFileData {
     return parseJson(content);
   }
 
-  return parseMarkdownOrText(content, ext);
+  return parseMarkdownOrText(content, ext, filePath);
 }

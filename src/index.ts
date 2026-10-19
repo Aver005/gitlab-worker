@@ -60,7 +60,7 @@ import {
   type WorkItemNode,
   type TimeTrackingWidgetInput,
 } from "./api.ts";
-import { parseIssueFile, applyOverrides, type IssueFileData } from "./inputfile.ts";
+import { parseIssueFile, applyOverrides, expandIssueFiles, type IssueFileData } from "./inputfile.ts";
 import {
   formatIssueLine,
   isOpenState,
@@ -93,7 +93,7 @@ Commands:
   use <project>         Set the default project (saved to glw.config.json)
   labels                List the project's labels (incl. group labels)
   search                Search work items with filters
-  create <file>         Create a work item from a file
+  create <file|dir>...  Create work items from files
   list                  List work items
   view <iid>            Show a work item
   update [iid...] ...   Update one or more work items
@@ -957,6 +957,94 @@ function printCreatePlan(file: string, parsed: IssueFileData, data: IssueFileDat
   for (const p of problems) console.log(red(`  ✗ ${p}`));
 }
 
+interface BatchOptions {
+  overrides: IssueFileData;
+  extraLabels: string[];
+  dryRun: boolean;
+  json: boolean;
+  askFirst: boolean;
+}
+
+/** One item per file; a failed file doesn't stop the rest. Exit code 1 if any failed. */
+async function createBatch(config: Config, files: string[], opts: BatchOptions): Promise<void> {
+  if (opts.askFirst && !opts.dryRun) {
+    console.log(`\nWill create ${yellow(String(files.length))} work item(s) from:\n`);
+    for (const f of files) console.log(`  ${f}`);
+    console.log();
+    if (!(await confirm(`Create ${files.length} item(s)?`))) {
+      console.log(dim("Aborted."));
+      return;
+    }
+  }
+
+  const summary: Array<{ file: string; result: string; failed: boolean }> = [];
+  const jsonOut: unknown[] = [];
+  const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+  for (const file of files) {
+    let parsed: IssueFileData;
+    try {
+      parsed = parseIssueFile(file);
+    } catch (err) {
+      const error = errorText(err);
+      summary.push({ file, result: `✗ ${error}`, failed: true });
+      if (opts.json) jsonOut.push(opts.dryRun ? { file, problems: [error] } : { file, error });
+      else console.error(red(`Failed ${file}: ${error}`));
+      continue;
+    }
+
+    const data = applyOverrides(parsed, opts.overrides, opts.extraLabels);
+    const plan = await planCreate(config, data);
+
+    if (opts.dryRun) {
+      const { input, timeTracking, problems } = plan;
+      if (opts.json) jsonOut.push({ file, parsed, final: data, input, timeTracking, problems });
+      else printCreatePlan(file, parsed, data, problems);
+      const failed = problems.length > 0;
+      summary.push({ file, result: failed ? `✗ ${problems.length} problem(s)` : `ok: ${data.title}`, failed });
+      continue;
+    }
+
+    if (plan.problems.length > 0) {
+      const error = plan.problems.join("; ");
+      summary.push({ file, result: `✗ ${error}`, failed: true });
+      if (opts.json) jsonOut.push({ file, error });
+      else console.error(red(`Failed ${file}: ${error}`));
+      continue;
+    }
+
+    try {
+      const { created, followUpError } = await executeCreate(config, plan);
+      const result = `#${created.iid} ${created.title}` + (followUpError ? ` ✗ ${followUpError}` : "");
+      summary.push({ file, result, failed: !!followUpError });
+      if (opts.json) {
+        const item = await getWorkItemByIid(config, created.iid);
+        jsonOut.push(followUpError ? { file, item, error: followUpError } : { file, item });
+      } else {
+        console.log(`${green("Created")} ${cyan("#" + created.iid)} ${bold(created.title)} ${dim(file)}`);
+        if (followUpError) console.error(red(followUpError));
+      }
+    } catch (err) {
+      const error = errorText(err);
+      summary.push({ file, result: `✗ ${error}`, failed: true });
+      if (opts.json) jsonOut.push({ file, error });
+      else console.error(red(`Failed ${file}: ${error}`));
+    }
+  }
+
+  const failedCount = summary.filter((s) => s.failed).length;
+  if (opts.json) {
+    console.log(JSON.stringify(jsonOut));
+  } else {
+    const okWord = opts.dryRun ? "ready" : "created";
+    console.log(`\n${bold("Summary")}: ${summary.length - failedCount} ${okWord}, ${failedCount} failed`);
+    const lines = formatFieldTable(summary.map(({ file, result }) => ({ file, result })), ["file", "result"]);
+    console.log("  " + dim(lines[0]!));
+    lines.slice(1).forEach((line, i) => console.log("  " + (summary[i]!.failed ? red(line) : line)));
+  }
+  if (failedCount > 0) process.exit(1);
+}
+
 // create
 async function cmdCreate(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -978,6 +1066,7 @@ async function cmdCreate(args: string[]): Promise<void> {
       confidential: { type: "boolean" },
       type: { type: "string" },
       "dry-run": { type: "boolean" },
+      yes: { type: "boolean" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
@@ -987,12 +1076,15 @@ async function cmdCreate(args: string[]): Promise<void> {
 
   if (values["help"]) {
     console.log(`
-glw create <file> [flags]
+glw create <file|dir>... [flags]
 
-Create a work item from a file (.md, .txt, .json).
+Create work items from files (.md, .txt, .json). Several files or a directory
+create one item per file, continue past failures and end with a summary.
 
 Arguments:
-  <file>              Path to the issue file
+  <file>              Path to an issue file
+  <dir>               Every .md/.markdown/.txt/.json file directly inside it
+                      (no subdirectories, natural sort); asks to confirm
 
 Flags:
   --title <t>         Override/set title
@@ -1010,14 +1102,20 @@ Flags:
   --confidential      Mark as confidential
   --type <name>       Work item type (default: Issue)
   --dry-run           Show parsed and final fields, check names on the server, send nothing
+  --yes               Skip the confirmation for a directory
   --project <path>    Override project
-  --json              Full created item, same shape as "view --json"
+  --json              Full created item, same shape as "view --json";
+                      several files: [{ file, item?, error? }]
+
+Flags apply to every file. --title works with a single file only.
 `);
     return;
   }
 
-  const filePath = positionals[0];
-  if (!filePath) die("Usage: glw create <file>");
+  if (positionals.length === 0) die("Usage: glw create <file|dir>...");
+  const { files, fromDir } = expandIssueFiles(positionals);
+  if (files.length === 0) die(`No .md/.txt/.json files found in: ${positionals.join(", ")}`);
+  if (values["title"] && files.length > 1) die(`--title can't be used with several files`);
 
   const overrides: IssueFileData = {
     title: getFlag(values, "title"),
@@ -1040,6 +1138,18 @@ Flags:
 
   const config = await resolveConfig(getFlag(values, "project"));
 
+  if (files.length > 1 || fromDir) {
+    await createBatch(config, files, {
+      overrides,
+      extraLabels,
+      dryRun: getBoolFlag(values, "dry-run"),
+      json: getBoolFlag(values, "json"),
+      askFirst: fromDir && !getBoolFlag(values, "yes"),
+    });
+    return;
+  }
+
+  const filePath = files[0]!;
   const parsed = parseIssueFile(filePath);
   const data = applyOverrides(parsed, overrides, extraLabels);
   const plan = await planCreate(config, data);

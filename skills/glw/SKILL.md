@@ -194,6 +194,15 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
    which succeeded and which failed; a non-zero exit with some successes is
    partial success, not total failure.
 
+**Batch create** (`glw create a.md b.md` or `glw create <dir>`): first
+`glw create <files|dir> --dry-run --json` and fix every entry with non-empty
+`problems`; then run with `--yes --json` (a directory asks for confirmation,
+which auto-declines without a TTY). Output is `[{ file, item?, error? }]`:
+`item` without `error` = created; `item` with `error` = created but time
+tracking failed (retry with `estimate`/`spend`, do NOT create again); `error`
+alone = not created. Never rerun the whole batch after a partial failure —
+that duplicates the created items; rerun only the failed files.
+
 ## 6. Error recovery
 
 | Symptom (exact text fragment) | Cause | Action |

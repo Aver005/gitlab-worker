@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { parseIssueFile, applyOverrides } from "../src/inputfile.ts";
+import { parseIssueFile, applyOverrides, expandIssueFiles } from "../src/inputfile.ts";
 import { writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -326,5 +326,28 @@ describe("applyOverrides", () => {
   it("does not mutate the input", () => {
     applyOverrides(base, { title: "X" }, ["y"]);
     expect(base).toEqual({ title: "File", labels: ["bug"], status: "To do", weight: 3 });
+  });
+});
+
+describe("expandIssueFiles", () => {
+  it("expands a directory to top-level issue files in natural order", () => {
+    const dir = join(TMP, "batch");
+    mkdirSync(join(dir, "nested"), { recursive: true });
+    for (const n of ["10-last.md", "2-second.json", "1-first.txt", "notes.yaml", "nested/skip.md"]) {
+      writeFileSync(join(dir, n), "# x");
+    }
+    expect(expandIssueFiles([dir])).toEqual({
+      files: [join(dir, "1-first.txt"), join(dir, "2-second.json"), join(dir, "10-last.md")],
+      fromDir: true,
+    });
+  });
+
+  it("passes files through and drops duplicates", () => {
+    const f = write("single.md", "# One");
+    expect(expandIssueFiles([f, f])).toEqual({ files: [f], fromDir: false });
+  });
+
+  it("throws on a missing path", () => {
+    expect(() => expandIssueFiles([join(TMP, "nope.md")])).toThrow(/Cannot read file/);
   });
 });

@@ -208,10 +208,19 @@ glw view 42 --fields status,labels,estimate,spent --json
 
 ---
 
-## create — `glw create <file> [flags]` (alias `cr`)
+## create — `glw create <file|dir>... [flags]` (alias `cr`)
 
 Creates a work item from `.md`, `.txt`, or `.json`. Flags override file
 frontmatter/fields.
+
+Several files or a directory create one item per file. A directory expands to
+its top-level `.md`/`.markdown`/`.txt`/`.json` files (no recursion, natural
+sort) and asks for confirmation first — pass `--yes` in scripts. Flags apply to
+every file; `--title` is rejected with more than one file. A failed file is
+reported and the rest continue; the run ends with a `FILE / RESULT` summary and
+exit code 1 if anything failed. `--json` in batch mode prints
+`[{ file, item?, error? }]` (`item` = full node as from `view --json`);
+`--dry-run --json` prints one plan object per file.
 
 | Flag | Meaning |
 |---|---|
@@ -230,6 +239,7 @@ frontmatter/fields.
 | `--confidential` | mark confidential |
 | `--type <name>` | work item type (default `Issue`) |
 | `--dry-run` | show parsed/final fields and check names on the server; send nothing |
+| `--yes` | skip the confirmation when creating from a directory |
 | `--project <path>` | override project |
 | `--json` | full created node, same shape as `view --json` (widgets included) |
 
@@ -277,6 +287,9 @@ glw create issue.md
 glw create issue.md --title "Other title" --assignee @me --label urgent
 glw create issue.json --project acme/other-project --json
 glw create issue.md --dry-run
+glw create tasks/a.md tasks/b.md --json
+glw create tasks/ --dry-run
+glw create tasks/ --label sprint-12 --yes
 ```
 
 `--dry-run` sends nothing. It prints the final fields (values that came from
