@@ -23,6 +23,10 @@
   сервере запросами на чтение; все ошибки (включая длительности и даты)
   выводятся разом, код выхода 1. `--json` отдаёт разобранный файл, итоговые
   поля и готовый `workItemCreateInput`
+- `--fields <csv>` у `list`, `search`, `view` — плоский вывод выбранных полей
+  (`iid`, `title`, `state`, `status`, `labels`, `assignees`, `weight`, `start`,
+  `due`, `estimate`, `spent`, `url`, `description`, `id`): таблица или, с
+  `--json`, объекты без разбора массива `widgets`
 
 ### Изменено
 

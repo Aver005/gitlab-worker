@@ -26,6 +26,7 @@ bun test        # все тесты зелёные, тесты не ходят �
 | `src/gql.ts` | GraphQL-клиент: POST `{url}/api/graphql`, `Authorization: Bearer` |
 | `src/config.ts` | Конфиг: `process.env` > локальный `.env` > локальный `glw.config.json` > глобальные `.env`/`glw.config.json` из `globalDir()` (`%APPDATA%/glw`, POSIX `~/.config/glw`) — глобальный слой активен только при `glw global on` (`settings.json` там же); `loadConfig(override?, requireProject)` |
 | `src/inputfile.ts` | Парсинг md/txt/json файлов задач, мини-YAML frontmatter |
+| `src/fields.ts` | Плоский вывод `--fields`: реестр полей, `parseFields`, `flattenItem`, таблица |
 | `src/format.ts` | ANSI-цвета (NO_COLOR/TTY-aware), `isOpenState`, `secondsToHuman`, `chunk` |
 | `src/cache.ts` | Кеш путей проектов `<globalDir>/projects.json` для shell-автокомплита (читает и легаси `~/.glw/`; best-effort, ошибки записи молча глотаются) |
 

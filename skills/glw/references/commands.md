@@ -150,6 +150,7 @@ with AND.
 | `--start_time <d>` / `--start <d>` | — | start date >= YYYY-MM-DD |
 | `--state opened\|closed\|all` | opened | state filter |
 | `--limit <n>` | 200 | max items to fetch |
+| `--fields <csv>` | — | flat output of chosen fields (see below) |
 | `--project <ref>` | — | override project |
 | `--json` | — | JSON array output |
 
@@ -158,6 +159,7 @@ glw search "authentication"
 glw search --name "auth" --body "JWT"
 glw s --start_time 2026-01-01 --state all
 glw search --name "refactor:" --limit 50 --json
+glw search "auth" --fields iid,title,status,labels --json
 ```
 
 ---
@@ -171,6 +173,7 @@ glw search --name "refactor:" --limit 50 --json
 | `--assignee <u>` | — | filter by assignee (client-side; `@me` allowed) |
 | `--label <l>` | — | filter by label (client-side) |
 | `--limit <n>` | 50 | max results |
+| `--fields <csv>` | — | flat output of chosen fields (see below) |
 | `--project <path>` | — | override project |
 | `--json` | — | JSON array output |
 
@@ -179,17 +182,28 @@ glw list
 glw list --state all --search "refactor"
 glw list --assignee @me --label bug --json
 glw list --state closed --limit 100
+glw list --fields iid,title,labels,status,weight,estimate,spent
 ```
+
+**Flat fields** (`--fields <csv>` on `search`, `list`, `view`): `iid`, `id`,
+`title`, `state` (`open`/`closed`), `status`, `labels`, `assignees`, `weight`,
+`start`, `due`, `estimate`, `spent`, `url`, `description`. Without `--json`:
+a padded table (`view`: key/value lines), durations as `1h 30m`, empty values
+as `-`. With `--json`: flat objects (`view`: one object), `estimate`/`spent`
+in **seconds**, `labels`/`assignees` as arrays of titles/usernames, missing
+values `null`. Unknown field names fail before any request.
 
 ---
 
-## view — `glw view <iid> [--json] [--project <path>]` (alias `v`)
+## view — `glw view <iid> [--fields <csv>] [--json] [--project <path>]` (alias `v`)
 
-Shows one work item. JSON = single node with `widgets`.
+Shows one work item. JSON = single node with `widgets`; with `--fields` — one
+flat object (fields as for `list`).
 
 ```bash
 glw view 42
 glw view 42 --json
+glw view 42 --fields status,labels,estimate,spent --json
 ```
 
 ---

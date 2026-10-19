@@ -126,6 +126,7 @@ glw create issue.md
 ```bash
 glw list --assignee @me                        # мои открытые задачи
 glw view 42                                    # всё о задаче #42
+glw list --fields iid,title,status,labels,estimate,spent   # только нужные колонки
 glw update 42 --status "In progress" --weight 5
 glw update 42 --due none                       # "none" очищает поле
 glw comment 42 "Проверено, работает"
@@ -332,7 +333,9 @@ glw s "bug" --state all --json
 
 При ошибке на отдельной задаче массовая операция продолжается, код выхода будет ненулевым.
 
-`glw close` использует те же фильтры; `--comment "<текст>"` добавит комментарий перед закрытием. `glw list`: `--state`, `--search`, `--assignee`, `--label`, `--limit` (по умолчанию 50), `--json`.
+`glw close` использует те же фильтры; `--comment "<текст>"` добавит комментарий перед закрытием. `glw list`: `--state`, `--search`, `--assignee`, `--label`, `--limit` (по умолчанию 50), `--fields`, `--json`.
+
+**Плоский вывод** (`--fields <csv>` у `list`, `search`, `view`): `iid`, `id`, `title`, `state`, `status`, `labels`, `assignees`, `weight`, `start`, `due`, `estimate`, `spent`, `url`, `description`. Без `--json` — выровненная таблица (у `view` — строки «ключ значение»), длительности вида `1h 30m`. С `--json` — плоские объекты без массива `widgets`: `estimate`/`spent` в секундах, `labels`/`assignees` массивами, пустые значения `null`.
 
 </details>
 

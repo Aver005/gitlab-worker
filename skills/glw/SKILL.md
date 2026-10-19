@@ -109,6 +109,13 @@ JSON shape (verified against `src/api.ts`):
 To get an assignee's username: find the widget with `type == "ASSIGNEES"`, read
 `assignees.nodes[0].username`. `whoami --json` → `{id,username,name}`.
 
+**Prefer flat fields** when you only need a few values: `list`/`search`/`view`
+accept `--fields iid,title,status,labels,weight,estimate,spent --json` and
+return flat objects (`view`: one object) — no widget digging. `labels` and
+`assignees` are arrays of titles/usernames, `estimate`/`spent` are seconds,
+missing values are `null`. Available: `iid id title state status labels
+assignees weight start due estimate spent url description`.
+
 ## 4. Intent → command mapping (canonical)
 
 Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings):

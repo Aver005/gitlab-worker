@@ -75,6 +75,7 @@ import {
   chunk,
 } from "./format.ts";
 import { readProjectsCache, writeProjectsCache } from "./cache.ts";
+import { FIELD_NAMES, parseFields, flattenItem, fieldText, formatFieldTable } from "./fields.ts";
 
 // ─── Global help ─────────────────────────────────────────────────────────────
 
@@ -179,6 +180,31 @@ function getMultiFlag(
   if (Array.isArray(v)) return v;
   if (typeof v === "string") return [v];
   return [];
+}
+
+const FIELDS_HELP = `Fields (--fields): ${FIELD_NAMES.join(", ")}
+  JSON keeps estimate/spent in seconds and labels/assignees as arrays.`;
+
+function parseFieldsFlag(
+  values: Record<string, string | boolean | string[] | undefined>
+): string[] | undefined {
+  const raw = getFlag(values, "fields");
+  return raw === undefined ? undefined : parseFields(raw);
+}
+
+function printFields(items: WorkItemNode[], fields: string[], json: boolean): void {
+  const rows = items.map((i) => flattenItem(i, fields));
+  if (json) {
+    console.log(JSON.stringify(rows));
+    return;
+  }
+  if (rows.length === 0) {
+    console.log(dim("No work items found."));
+    return;
+  }
+  const [header, ...lines] = formatFieldTable(rows, fields);
+  console.log(bold(header!));
+  for (const line of lines) console.log(line);
 }
 
 function warnScopedLabelConflicts(names: string[]): void {
@@ -700,6 +726,7 @@ async function cmdSearch(args: string[]): Promise<void> {
       start: { type: "string" }, // alias for start_time
       state: { type: "string" },
       limit: { type: "string" },
+      fields: { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
@@ -709,7 +736,7 @@ async function cmdSearch(args: string[]): Promise<void> {
 
   if (values["help"]) {
     console.log(`
-glw search [text] [--name <q>] [--body <q>] [--start_time <YYYY-MM-DD>] [--state opened|closed|all] [--limit <n>] [--json] [--project <ref>]
+glw search [text] [--name <q>] [--body <q>] [--start_time <YYYY-MM-DD>] [--state opened|closed|all] [--limit <n>] [--fields <csv>] [--json] [--project <ref>]
 
 Search work items. At least one filter is required.
 
@@ -722,16 +749,22 @@ Flags:
   --start_time <d>   Start date >= YYYY-MM-DD (alias: --start)
   --state <s>        opened | closed | all (default: opened)
   --limit <n>        Max items to fetch (default: 200)
+  --fields <csv>     Flat output of chosen fields (see "Fields" below)
   --project <ref>    Override project
   --json             JSON output
+
+${FIELDS_HELP}
 
 Examples:
   glw search "authentication"
   glw search --name "auth" --body "JWT"
   glw s --start_time 2026-01-01 --state all
+  glw search "auth" --fields iid,title,status,labels --json
 `);
     return;
   }
+
+  const fields = parseFieldsFlag(values);
 
   const text = positionals[0];
   const name = getFlag(values, "name");
@@ -770,6 +803,11 @@ Examples:
       criteria
     );
   });
+
+  if (fields) {
+    printFields(filtered, fields, getBoolFlag(values, "json"));
+    return;
+  }
 
   if (values["json"]) {
     console.log(JSON.stringify(filtered));
@@ -1045,6 +1083,7 @@ async function cmdList(args: string[]): Promise<void> {
       assignee: { type: "string" },
       label: { type: "string" },
       limit: { type: "string" },
+      fields: { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
@@ -1063,12 +1102,16 @@ Flags:
   --assignee <u>    Filter by assignee (client-side)
   --label <l>       Filter by label (client-side)
   --limit <n>       Max results (default: 50)
+  --fields <csv>    Flat output of chosen fields (see "Fields" below)
   --project <path>  Override project
   --json            JSON output
+
+${FIELDS_HELP}
 `);
     return;
   }
 
+  const fields = parseFieldsFlag(values);
   const config = await resolveConfig(getFlag(values, "project"));
   const stateRaw = (getFlag(values, "state") ?? "opened") as "opened" | "closed" | "all";
 
@@ -1076,6 +1119,7 @@ Flags:
     state: stateRaw,
     search: getFlag(values, "search"),
     limit: values["limit"] ? parseInt(values["limit"] as string, 10) : 50,
+    includeDescription: fields?.includes("description"),
   });
 
   let filtered = items;
@@ -1109,6 +1153,11 @@ Flags:
     );
   }
 
+  if (fields) {
+    printFields(filtered, fields, getBoolFlag(values, "json"));
+    return;
+  }
+
   if (values["json"]) {
     console.log(JSON.stringify(filtered));
     return;
@@ -1140,6 +1189,7 @@ async function cmdView(args: string[]): Promise<void> {
     args,
     options: {
       project: { type: "string" },
+      fields: { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
@@ -1149,9 +1199,12 @@ async function cmdView(args: string[]): Promise<void> {
 
   if (values["help"]) {
     console.log(`
-glw view <iid> [--json] [--project <path>]
+glw view <iid> [--fields <csv>] [--json] [--project <path>]
 
-Show details for a work item.
+Show details for a work item. With --fields: only those fields, as
+key/value lines, or one flat JSON object with --json.
+
+${FIELDS_HELP}
 `);
     return;
   }
@@ -1159,8 +1212,16 @@ Show details for a work item.
   const iid = positionals[0];
   if (!iid) die("Usage: glw view <iid>");
 
+  const fields = parseFieldsFlag(values);
   const config = await resolveConfig(getFlag(values, "project"));
   const item = await getWorkItemByIid(config, iid);
+
+  if (fields) {
+    const row = flattenItem(item, fields);
+    if (values["json"]) console.log(JSON.stringify(row));
+    else printTable(fields.map((f) => [f, fieldText(f, row[f] ?? null)]));
+    return;
+  }
 
   if (values["json"]) {
     console.log(JSON.stringify(item));

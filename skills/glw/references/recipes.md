@@ -36,6 +36,8 @@ with `search`/`list --json`.
 | "задачи начиная с 2026-01-01" | `glw search --start_time 2026-01-01 --json` |
 | "задачи с меткой bug на мне" | `glw list --label bug --assignee @me --json` |
 | "найди среди всех (вкл. закрытые)" | add `--state all` |
+| "покажи мои задачи с весом и оценкой" | `glw list --assignee @me --fields iid,title,status,weight,estimate,spent --json` |
+| "какой статус и метки у 42" | `glw view 42 --fields status,labels --json` |
 
 ## Creating
 
