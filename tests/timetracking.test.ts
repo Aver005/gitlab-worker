@@ -34,7 +34,7 @@ describe("buildTimeTrackingWidget", () => {
   });
 
   it("rejects a spend date without a duration", () => {
-    expect(() => buildTimeTrackingWidget({ spendDate: "2026-10-15" })).toThrow(/--spend/);
+    expect(() => buildTimeTrackingWidget({ spendDate: "2026-10-15" })).toThrow(/without a duration/);
     expect(() => buildTimeTrackingWidget({ estimate: "2h", spendDate: "2026-10-15" })).toThrow();
   });
 });

@@ -806,7 +806,7 @@ export function buildTimeTrackingWidget(
   fields: TimeTrackingFields
 ): TimeTrackingWidgetInput | undefined {
   if (fields.spendDate !== undefined && fields.spend === undefined) {
-    throw new Error(`A spend date needs a duration to log (--spend)`);
+    throw new Error(`Spend date given without a duration to log (--spend or "spend:")`);
   }
   if (fields.estimate === undefined && fields.spend === undefined) return undefined;
   const tw: TimeTrackingWidgetInput = {};

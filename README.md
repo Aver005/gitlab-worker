@@ -102,6 +102,8 @@ labels: backend, security
 assignee: @me
 weight: 8
 estimate: 3h
+spend: 1h
+spend_date: 2026-07-01
 due: 2026-07-31
 status: To do
 ---
@@ -337,7 +339,7 @@ glw s "bug" --state all --json
 
 **Статусы**: `To do`, `In progress`, `Done`, `Won't do`, `Duplicate` (регистр не важен; проект может определять свои — при опечатке `glw` покажет доступные).
 
-**Файл задачи (`glw create`)** — `.md`/`.txt` с YAML-шапкой между `---`. Ключи: `title`, `labels`, `assignees`/`assignee`, `weight`, `estimate`, `start`/`start_date`, `due`/`due_date`, `status`, `confidential`, `type`. Если в шапке нет ни одного известного ключа (например, это шаблон GitLab с `name:`/`about:`) — весь файл, включая `---`-блок, станет описанием задачи.
+**Файл задачи (`glw create`)** — `.md`/`.txt` с YAML-шапкой между `---`. Ключи: `title`, `labels`, `assignees`/`assignee`, `weight`, `estimate`, `spend`, `spend_date`, `spend_summary`, `start`/`start_date`, `due`/`due_date`, `status`, `confidential`, `type`. Оценка и списание ставятся вторым запросом сразу после создания (GitLab не принимает их в самом создании); флаги `--spend`, `--date`, `--summary` у `create` делают то же самое. Если в шапке нет ни одного известного ключа (например, это шаблон GitLab с `name:`/`about:`) — весь файл, включая `---`-блок, станет описанием задачи.
 
 `.json`-файл: те же поля плюс `description`/`body`:
 
@@ -349,6 +351,9 @@ glw s "bug" --state all --json
   "assignees": ["alice"],
   "weight": 5,
   "estimate": "2h",
+  "spend": "30m",
+  "spend_date": "2026-07-01",
+  "spend_summary": "разбор",
   "due": "2026-07-31",
   "status": "To do"
 }

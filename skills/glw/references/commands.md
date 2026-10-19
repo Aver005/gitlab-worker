@@ -190,6 +190,9 @@ frontmatter/fields.
 | `--start YYYY-MM-DD` | start date |
 | `--due YYYY-MM-DD` | due date |
 | `--estimate <dur>` | time estimate (e.g. `2h`) |
+| `--spend <dur>` | log time spent right after creation |
+| `--date YYYY-MM-DD` | day the time was spent (default: today) |
+| `--summary <s>` | summary for the time log |
 | `--status <name>` | status (e.g. `"In progress"`) |
 | `--confidential` | mark confidential |
 | `--type <name>` | work item type (default `Issue`) |
@@ -197,10 +200,16 @@ frontmatter/fields.
 | `--json` | JSON of created item |
 
 **Input file — MD/txt frontmatter** (optional block between `---` lines). Keys:
-`title`, `labels`, `assignees`/`assignee`, `weight`, `estimate`,
-`start`/`start_date`, `due`/`due_date`, `status`, `confidential`, `type`. If the
-frontmatter contains **none** of these keys (e.g. a GitLab template with
-`name:`/`about:`), the entire file including `---` is treated as the body.
+`title`, `labels`, `assignees`/`assignee`, `weight`, `estimate`, `spend`,
+`spend_date`, `spend_summary`, `start`/`start_date`, `due`/`due_date`,
+`status`, `confidential`, `type`. If the frontmatter contains **none** of these
+keys (e.g. a GitLab template with `name:`/`about:`), the entire file including
+`---` is treated as the body.
+
+GitLab does not accept time tracking in `workItemCreate`, so estimate and spend
+are sent by a second `workItemUpdate` in the same command. If that second
+request fails, the item is already created: the error names its iid and the
+exit code is 1.
 
 ```markdown
 ---
@@ -223,6 +232,7 @@ Implement JWT authorization.
   "title": "Task name", "description": "Body",
   "labels": ["bug","v2"], "assignees": ["alice"],
   "weight": 5, "estimate": "2h",
+  "spend": "30m", "spend_date": "2026-07-01", "spend_summary": "triage",
   "start": "2026-07-01", "due": "2026-07-31",
   "status": "To do", "type": "Issue"
 }

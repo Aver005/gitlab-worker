@@ -743,6 +743,9 @@ async function cmdCreate(args: string[]): Promise<void> {
       start: { type: "string" },
       due: { type: "string" },
       estimate: { type: "string" },
+      spend: { type: "string" },
+      date: { type: "string" },
+      summary: { type: "string" },
       status: { type: "string" },
       confidential: { type: "boolean" },
       type: { type: "string" },
@@ -771,6 +774,9 @@ Flags:
   --start YYYY-MM-DD  Set start date
   --due YYYY-MM-DD    Set due date
   --estimate <dur>    Set time estimate (e.g. 2h)
+  --spend <dur>       Log time spent right after creation
+  --date YYYY-MM-DD   Day the time was spent (default: today)
+  --summary <s>       Summary for the time log
   --status <name>     Set status (e.g. "In progress")
   --confidential      Mark as confidential
   --type <name>       Work item type (default: Issue)
@@ -794,6 +800,9 @@ Flags:
   if (values["start"]) fileData.start = values["start"] as string;
   if (values["due"]) fileData.due = values["due"] as string;
   if (values["estimate"]) fileData.estimate = values["estimate"] as string;
+  if (values["spend"]) fileData.spend = values["spend"] as string;
+  if (values["date"]) fileData.spendDate = values["date"] as string;
+  if (values["summary"]) fileData.spendSummary = values["summary"] as string;
   if (values["status"]) fileData.status = values["status"] as string;
   if (values["type"]) fileData.type = values["type"] as string;
   if (values["assignee"]) fileData.assignees = [values["assignee"] as string];
@@ -863,7 +872,7 @@ Flags:
   }
 
   // Validate before creating so a bad duration doesn't leave a half-done item.
-  const timeTracking = buildTimeTrackingWidget({ estimate: fileData.estimate });
+  const timeTracking = buildTimeTrackingWidget(fileData);
 
   const created = await createWorkItem(config, createInput);
 

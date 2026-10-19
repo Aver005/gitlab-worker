@@ -8,6 +8,9 @@ export interface IssueFileData {
   assignees?: string[];
   weight?: number;
   estimate?: string;
+  spend?: string;
+  spendDate?: string;
+  spendSummary?: string;
   start?: string;
   due?: string;
   status?: string;
@@ -23,6 +26,9 @@ const RECOGNIZED_KEYS = new Set([
   "assignee",
   "weight",
   "estimate",
+  "spend",
+  "spend_date",
+  "spend_summary",
   "start",
   "start_date",
   "due",
@@ -196,6 +202,9 @@ function parseMarkdownOrText(
     }
     if ("weight" in data) result.weight = asNumber(data["weight"]!);
     if ("estimate" in data) result.estimate = asString(data["estimate"]!);
+    if ("spend" in data) result.spend = asString(data["spend"]!);
+    if ("spend_date" in data) result.spendDate = asString(data["spend_date"]!);
+    if ("spend_summary" in data) result.spendSummary = asString(data["spend_summary"]!);
     if ("start" in data) result.start = asString(data["start"]!);
     if ("start_date" in data) result.start = asString(data["start_date"]!);
     if ("due" in data) result.due = asString(data["due"]!);
@@ -267,6 +276,9 @@ function parseJson(content: string): IssueFileData {
 
   if (typeof obj["weight"] === "number") result.weight = obj["weight"];
   if (typeof obj["estimate"] === "string") result.estimate = obj["estimate"];
+  if (typeof obj["spend"] === "string") result.spend = obj["spend"];
+  if (typeof obj["spend_date"] === "string") result.spendDate = obj["spend_date"];
+  if (typeof obj["spend_summary"] === "string") result.spendSummary = obj["spend_summary"];
   if (typeof obj["start"] === "string") result.start = obj["start"];
   if (typeof obj["due"] === "string") result.due = obj["due"];
   if (typeof obj["status"] === "string") result.status = obj["status"];

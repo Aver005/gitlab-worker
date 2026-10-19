@@ -43,6 +43,7 @@ with `search`/`list --json`.
 | "...и назначь на меня" | `glw create issue.md --assignee @me --json` |
 | "...с меткой urgent и весом 5" | `glw create issue.md --label urgent --weight 5 --json` |
 | "...оценка 2 часа, дедлайн 31 июля" | `glw create issue.md --estimate 2h --due 2026-07-31 --json` |
+| "...и сразу спиши 1 час за вчера" | `glw create issue.md --spend 1h --date 2026-07-01 --json` |
 | "...в статусе In progress" | `glw create issue.md --status "In progress" --json` |
 | "...в другом проекте acme/web" | `glw create issue.md --project acme/web --json` |
 | "создай конфиденциальную задачу" | `glw create issue.md --confidential --json` |

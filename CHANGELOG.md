@@ -10,6 +10,9 @@
 - `--date YYYY-MM-DD` у `spend` и `update --spend` — списание времени задним
   числом (поле `spentAt` в `timelog`; уходит как полдень UTC, чтобы день не
   сдвигался в часовом поясе пользователя)
+- Списание времени при `create`: ключи `spend`, `spend_date`, `spend_summary`
+  во frontmatter и JSON, флаги `--spend`, `--date`, `--summary`. Уходит тем же
+  вторым запросом, что и оценка
 
 ### Исправлено
 

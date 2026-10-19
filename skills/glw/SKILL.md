@@ -116,11 +116,14 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
 
 - **Create from file**: `glw create <file>` (.md/.txt/.json). MD/txt supports a
   YAML frontmatter block between `---` lines with keys: `title`, `labels`,
-  `assignees`/`assignee`, `weight`, `estimate`, `start`/`start_date`,
-  `due`/`due_date`, `status`, `confidential`, `type`. If frontmatter has none of
-  these keys, the whole file (incl. `---`) is treated as the body. Flags
-  override frontmatter: `--title --label(repeatable) --labels(csv) --assignee
-  --weight --start --due --estimate --status --confidential --type`.
+  `assignees`/`assignee`, `weight`, `estimate`, `spend`, `spend_date`,
+  `spend_summary`, `start`/`start_date`, `due`/`due_date`, `status`,
+  `confidential`, `type`. If frontmatter has none of these keys, the whole file
+  (incl. `---`) is treated as the body. Flags override frontmatter: `--title
+  --label(repeatable) --labels(csv) --assignee --weight --start --due
+  --estimate --spend --date --summary --status --confidential --type`.
+  Estimate/spend are applied by a second request right after creation; if
+  that fails, the item still exists — the error names its iid.
 - **Edit fields** (`glw update`): `--title --body --body-file --status
   --assignee --labels(set,csv) --add-label(repeatable) --remove-label
   --weight --start --due --estimate --spend --summary --date`. Clear a field with the
@@ -219,7 +222,8 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
 **C. "создай задачу из issue.md и поставь оценку 2 часа, назначь на меня"**
 1. `glw create issue.md --assignee @me --estimate 2h --json`
 2. Read `iid`/`webUrl` from JSON; report the new issue to the user.
-   (If estimate must be separate: `glw estimate <iid> 2h`.)
+   (If the command says the item was created but time tracking failed, retry
+   only that part: `glw estimate <iid> 2h`.)
 
 **D. "добавь метку bug задачам 42, 43, 44 и вес 5"**
 1. `glw update 42 43 44 --add-label bug --weight 5 --yes`

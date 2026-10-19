@@ -268,3 +268,40 @@ describe("parseIssueFile — JSON files", () => {
     expect(result.description).toBe("Body text");
   });
 });
+
+describe("parseIssueFile — spend keys", () => {
+  it("reads spend, spend_date and spend_summary from frontmatter", () => {
+    const f = write(
+      "spend.md",
+      `---
+title: Logged
+spend: 1h30m
+spend_date: 2026-10-15
+spend_summary: "analysis, notes"
+---
+Body`
+    );
+    const result = parseIssueFile(f);
+    expect(result.spend).toBe("1h30m");
+    expect(result.spendDate).toBe("2026-10-15");
+    expect(result.spendSummary).toBe("analysis, notes");
+  });
+
+  it("counts spend alone as recognized frontmatter", () => {
+    const f = write("spend-only.md", `---\nspend: 2h\n---\n# Title\nBody`);
+    const result = parseIssueFile(f);
+    expect(result.spend).toBe("2h");
+    expect(result.title).toBe("Title");
+  });
+
+  it("reads spend keys from JSON", () => {
+    const f = write(
+      "spend.json",
+      JSON.stringify({ title: "T", spend: "4h", spend_date: "2026-10-01", spend_summary: "s" })
+    );
+    const result = parseIssueFile(f);
+    expect(result.spend).toBe("4h");
+    expect(result.spendDate).toBe("2026-10-01");
+    expect(result.spendSummary).toBe("s");
+  });
+});
