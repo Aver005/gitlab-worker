@@ -201,6 +201,7 @@ npx skills add Aver005/gitlab-worker
 | `glw whoami` | | Кто я (проверка подключения) |
 | `glw projects` | `p` | Мои проекты |
 | `glw use <проект>` | | Выбрать проект по умолчанию |
+| `glw labels` | | Метки проекта, включая групповые (`--search`, `--json`) |
 | `glw list` | `l` `ls` | Список задач |
 | `glw view <iid>` | `v` | Подробности задачи |
 | `glw search <...>` | `s` | Поиск задач по фильтрам |

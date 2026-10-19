@@ -19,6 +19,8 @@ with `search`/`list --json`.
 | "покажи мои проекты", "list projects" | `glw projects` |
 | "найди проект backend", "find project backend" | `glw projects --search backend --json` |
 | "переключись на проект backend-api", "use project X" | `glw use backend-api` |
+| "какие есть метки", "list labels" | `glw labels --json` |
+| "какие бывают component-метки" | `glw labels --search "component::" --json` |
 | "задай токен", "set token" | `glw init <token>` (writes `.env`) |
 
 ## Viewing / searching

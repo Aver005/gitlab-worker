@@ -118,6 +118,25 @@ glw use acme/internal/backend-api
 
 ---
 
+## labels — `glw labels [flags]`
+
+Lists labels available in the project, including ones inherited from ancestor
+groups, sorted by title (scoped `scope::value` labels end up grouped).
+
+| Flag | Meaning |
+|---|---|
+| `--search <q>` | title or description contains `<q>` |
+| `--limit <n>` | max labels to fetch (default 500) |
+| `--project <ref>` | override project |
+| `--json` | `[{ id, title, description, color }]` |
+
+```bash
+glw labels
+glw labels --search "component::" --json
+```
+
+---
+
 ## search — `glw search [text] [flags]` (alias `s`)
 
 Searches work items; **at least one filter required**. Multiple filters combine

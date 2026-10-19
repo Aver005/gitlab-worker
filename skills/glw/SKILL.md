@@ -83,8 +83,8 @@ Protocol — never `--yes` blindly on an unpreviewed filter:
 
 For anything you must reason over (counts, iids, statuses, assignees), pass
 `--json`. Human output is colored and for showing the user only; do not parse
-it. Supported on: `whoami`, `projects`, `search`, `list`, `view`, `create`,
-`link`, `parent`.
+it. Supported on: `whoami`, `projects`, `labels`, `search`, `list`, `view`,
+`create`, `link`, `parent`.
 
 JSON shape (verified against `src/api.ts`):
 
@@ -151,6 +151,9 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
 - **Projects**: `glw projects [--search]` to discover; `glw use <name>` to set
   default; `--project <ref>` per command. `<ref>` = full `group/project` path
   or a unique short name.
+- **Labels**: `glw labels [--search <q>] --json` lists the labels that exist
+  (project + ancestor groups). Check it before passing label names to
+  `create`/`update` instead of guessing from other issues.
 - **Statuses**: system names are `To do`, `In progress`, `Done`, `Won't do`,
   `Duplicate` (case-insensitive; server may define custom ones). Quote names
   with spaces.

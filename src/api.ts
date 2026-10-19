@@ -549,6 +549,60 @@ export async function resolveLabels(
   return ids;
 }
 
+export interface LabelInfo {
+  id: string;
+  title: string;
+  description: string | null;
+  color: string;
+}
+
+/** Project labels including ancestor-group ones, fetched with cursor pagination. */
+export async function listLabels(
+  config: Config,
+  opts: { search?: string; limit?: number } = {}
+): Promise<LabelInfo[]> {
+  type LabelsPage = {
+    project: {
+      labels: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: LabelInfo[];
+      };
+    } | null;
+  };
+
+  const maxItems = opts.limit ?? 500;
+  const results: LabelInfo[] = [];
+  let cursor: string | null = null;
+
+  while (results.length < maxItems) {
+    const data: LabelsPage = await gql<LabelsPage>(
+      config,
+      `query ($fullPath: ID!, $search: String, $first: Int!, $after: String) {
+        project(fullPath: $fullPath) {
+          labels(searchTerm: $search, includeAncestorGroups: true, first: $first, after: $after) {
+            pageInfo { hasNextPage endCursor }
+            nodes { id title description color }
+          }
+        }
+      }`,
+      {
+        fullPath: config.project,
+        search: opts.search ?? null,
+        first: Math.min(100, maxItems - results.length),
+        after: cursor,
+      }
+    );
+    if (!data.project) throw new Error(`Project not found: "${config.project}"`);
+
+    const page = data.project.labels;
+    results.push(...page.nodes);
+    if (!page.pageInfo.hasNextPage || !page.pageInfo.endCursor) break;
+    cursor = page.pageInfo.endCursor;
+  }
+
+  return results.slice(0, maxItems);
+}
+
 // ─── User resolver ────────────────────────────────────────────────────────────
 
 export async function resolveUser(

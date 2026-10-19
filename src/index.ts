@@ -27,6 +27,7 @@ import {
   resolveProjectPath,
   resolveUser,
   resolveLabels,
+  listLabels,
   resolveWorkItemType,
   resolveStatus,
   getWorkItemByIid,
@@ -86,6 +87,7 @@ Commands:
   whoami                Show the authenticated user
   projects              List projects you are a member of
   use <project>         Set the default project (saved to glw.config.json)
+  labels                List the project's labels (incl. group labels)
   search                Search work items with filters
   create <file>         Create a work item from a file
   list                  List work items
@@ -619,6 +621,60 @@ Examples:
   console.log(
     `${green("Default project set:")} ${cyan(fullPath)} ${dim("(saved to glw.config.json)")}`
   );
+}
+
+// labels
+async function cmdLabels(args: string[]): Promise<void> {
+  const { values } = parseArgs({
+    args,
+    options: {
+      project: { type: "string" },
+      search: { type: "string" },
+      limit: { type: "string" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+    strict: false,
+  });
+
+  if (values["help"]) {
+    console.log(`
+glw labels [--search <q>] [--limit <n>] [--json] [--project <ref>]
+
+List labels available in the project, including ones inherited from groups.
+Sorted by title, so scoped labels (scope::value) are grouped together.
+
+Flags:
+  --search <q>      Title or description contains <q> (e.g. "component::")
+  --limit <n>       Max labels to fetch (default: 500)
+  --project <ref>   Override project
+  --json            JSON output: [{ id, title, description, color }]
+`);
+    return;
+  }
+
+  const config = await resolveConfig(getFlag(values, "project"));
+  const labels = await listLabels(config, {
+    search: getFlag(values, "search"),
+    limit: values["limit"] ? parseInt(values["limit"] as string, 10) : undefined,
+  });
+  labels.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+
+  if (values["json"]) {
+    console.log(JSON.stringify(labels));
+    return;
+  }
+
+  if (labels.length === 0) {
+    console.log(dim("No labels found."));
+    return;
+  }
+
+  const width = Math.max(...labels.map((l) => l.title.length));
+  for (const l of labels) {
+    const desc = l.description?.trim().split("\n")[0];
+    console.log(desc ? `${cyan(l.title.padEnd(width))}  ${dim(desc)}` : cyan(l.title));
+  }
 }
 
 // search
@@ -1954,7 +2010,7 @@ Completes command names and project paths after "use" / "--project"
   }
 
   const subcommands = [
-    "init", "config", "global", "whoami", "projects", "use", "search", "create", "list",
+    "init", "config", "global", "whoami", "projects", "use", "labels", "search", "create", "list",
     "view", "update", "comment", "close", "reopen", "link", "parent", "estimate", "spend",
     "completion",
     // aliases
@@ -2079,6 +2135,10 @@ async function main(): Promise<void> {
 
       case "use":
         await cmdUse(rest);
+        break;
+
+      case "labels":
+        await cmdLabels(rest);
         break;
 
       case "search":
