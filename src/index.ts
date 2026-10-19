@@ -28,6 +28,7 @@ import {
   resolveUser,
   resolveLabels,
   listLabels,
+  findScopedLabelConflicts,
   resolveWorkItemType,
   resolveStatus,
   getWorkItemByIid,
@@ -176,6 +177,14 @@ function getMultiFlag(
   if (Array.isArray(v)) return v;
   if (typeof v === "string") return [v];
   return [];
+}
+
+function warnScopedLabelConflicts(names: string[]): void {
+  for (const { scope, labels } of findScopedLabelConflicts(names)) {
+    process.stderr.write(
+      `glw: warning: labels ${labels.join(", ")} share scope "${scope}" — GitLab keeps only one\n`
+    );
+  }
 }
 
 // ─── Confirm prompt ───────────────────────────────────────────────────────────
@@ -906,6 +915,7 @@ Flags:
   }
 
   if (fileData.labels && fileData.labels.length > 0) {
+    warnScopedLabelConflicts(fileData.labels);
     const labelIds = await resolveLabels(config, fileData.labels);
     if (labelIds.length > 0) createInput.labelsWidget = { labelIds };
   }
@@ -1391,6 +1401,10 @@ Field flags:
   };
   // Fail on a bad duration/date before touching any item.
   buildTimeTrackingWidget(fields);
+  warnScopedLabelConflicts([
+    ...(fields.labels?.split(",").map((l) => l.trim()).filter(Boolean) ?? []),
+    ...(fields.addLabel ?? []),
+  ]);
 
   // Gather items
   let items: WorkItemNode[];

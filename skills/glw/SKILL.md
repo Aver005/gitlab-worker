@@ -154,6 +154,9 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
 - **Labels**: `glw labels [--search <q>] --json` lists the labels that exist
   (project + ancestor groups). Check it before passing label names to
   `create`/`update` instead of guessing from other issues.
+- **Scoped labels** (`scope::value`) are mutually exclusive: GitLab keeps one
+  per scope. A `glw: warning: labels ... share scope` line on stderr means you
+  passed two from one scope in the same call — pick one and rerun.
 - **Statuses**: system names are `To do`, `In progress`, `Done`, `Won't do`,
   `Duplicate` (case-insensitive; server may define custom ones). Quote names
   with spaces.

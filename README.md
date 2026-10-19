@@ -325,6 +325,8 @@ glw s "bug" --state all --json
 
 **Поля**: `--title`, `--body` / `--body-file <f>`, `--status <имя>`, `--assignee <u|@me|none>`, `--labels <csv>` (заменить все), `--add-label` / `--remove-label` (повторяемые), `--weight <n|none>`, `--start <дата|none>`, `--due <дата|none>`, `--estimate <dur>`, `--spend <dur>` (+ `--summary`, `--date YYYY-MM-DD` — день списания, по умолчанию сегодня). Значение `none` очищает поле.
 
+**Scoped-метки** (`scope::value`): GitLab оставляет на задаче одну метку из области. Если в одном наборе (`--labels`, `--add-label`, `labels:` во frontmatter) две метки одной области, например `component::backend` и `component::frontend`, `glw` предупредит в stderr. Замена уже стоящей метки через `--add-label` — штатное поведение, о ней предупреждения нет.
+
 При ошибке на отдельной задаче массовая операция продолжается, код выхода будет ненулевым.
 
 `glw close` использует те же фильтры; `--comment "<текст>"` добавит комментарий перед закрытием. `glw list`: `--state`, `--search`, `--assignee`, `--label`, `--limit` (по умолчанию 50), `--json`.

@@ -603,6 +603,28 @@ export async function listLabels(
   return results.slice(0, maxItems);
 }
 
+/**
+ * Groups of scoped labels that share a scope (text before the last "::").
+ * GitLab keeps only one label per scope, silently dropping the rest.
+ */
+export function findScopedLabelConflicts(
+  names: string[]
+): Array<{ scope: string; labels: string[] }> {
+  const byScope = new Map<string, { scope: string; labels: string[] }>();
+  const seen = new Set<string>();
+  for (const name of names) {
+    const key = name.toLowerCase();
+    const sep = name.lastIndexOf("::");
+    if (sep <= 0 || seen.has(key)) continue;
+    seen.add(key);
+    const scope = name.slice(0, sep);
+    const group = byScope.get(scope.toLowerCase()) ?? { scope, labels: [] };
+    group.labels.push(name);
+    byScope.set(scope.toLowerCase(), group);
+  }
+  return [...byScope.values()].filter((g) => g.labels.length > 1);
+}
+
 // ─── User resolver ────────────────────────────────────────────────────────────
 
 export async function resolveUser(

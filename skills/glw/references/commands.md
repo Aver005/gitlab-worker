@@ -297,6 +297,11 @@ Field flags:
 | `--spend <dur>` | log time spent |
 | `--summary <s>` | summary for the time log |
 | `--date YYYY-MM-DD` | day the time was spent (default: today); needs `--spend` |
+
+Scoped labels (`scope::value`) keep one per scope. If `--labels`/`--add-label`
+(or `labels:` in a `create` file) contain two labels of one scope, glw prints
+`glw: warning: labels a::x, a::y share scope "a" — GitLab keeps only one` to
+stderr and still sends the request.
 | `--yes` | skip confirmation (REQUIRED non-TTY on filter selection) |
 | `--dry-run` | preview matched items; make no changes |
 | `--project <path>` | override project |
