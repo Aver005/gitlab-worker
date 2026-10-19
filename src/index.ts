@@ -781,7 +781,7 @@ Flags:
   --confidential      Mark as confidential
   --type <name>       Work item type (default: Issue)
   --project <path>    Override project
-  --json              JSON output
+  --json              Full created item, same shape as "view --json"
 `);
     return;
   }
@@ -886,7 +886,8 @@ Flags:
   }
 
   if (values["json"]) {
-    console.log(JSON.stringify(created));
+    // Re-read so the output shows widgets as GitLab stored them, same shape as view --json.
+    console.log(JSON.stringify(await getWorkItemByIid(config, created.iid)));
   } else {
     console.log(
       `${green("Created")} ${cyan("#" + created.iid)} ${bold(created.title)}`

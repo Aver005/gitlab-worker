@@ -197,7 +197,7 @@ frontmatter/fields.
 | `--confidential` | mark confidential |
 | `--type <name>` | work item type (default `Issue`) |
 | `--project <path>` | override project |
-| `--json` | JSON of created item |
+| `--json` | full created node, same shape as `view --json` (widgets included) |
 
 **Input file — MD/txt frontmatter** (optional block between `---` lines). Keys:
 `title`, `labels`, `assignees`/`assignee`, `weight`, `estimate`, `spend`,

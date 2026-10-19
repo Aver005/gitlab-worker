@@ -221,7 +221,8 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
 
 **C. "создай задачу из issue.md и поставь оценку 2 часа, назначь на меня"**
 1. `glw create issue.md --assignee @me --estimate 2h --json`
-2. Read `iid`/`webUrl` from JSON; report the new issue to the user.
+2. Read `iid`/`webUrl` from JSON; check labels/status/weight/estimate in its
+   `widgets` (same node as `view --json`, no extra `view` needed); report.
    (If the command says the item was created but time tracking failed, retry
    only that part: `glw estimate <iid> 2h`.)
 
