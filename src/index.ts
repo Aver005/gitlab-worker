@@ -39,6 +39,7 @@ import {
   parseLinkType,
   normalizeIid,
   validateDuration,
+  buildTimeTrackingWidget,
   getAssignees,
   getLabels,
   getStatus,
@@ -861,12 +862,19 @@ Flags:
     createInput.statusWidget = { status: statusGid };
   }
 
-  if (fileData.estimate) {
-    const dur = validateDuration(fileData.estimate);
-    createInput.timeTrackingWidget = { timeEstimate: dur };
-  }
+  // Validate before creating so a bad duration doesn't leave a half-done item.
+  const timeTracking = buildTimeTrackingWidget({ estimate: fileData.estimate });
 
   const created = await createWorkItem(config, createInput);
+
+  let followUpError: string | undefined;
+  if (timeTracking) {
+    try {
+      await updateWorkItem(config, { id: created.id, timeTrackingWidget: timeTracking });
+    } catch (err) {
+      followUpError = err instanceof Error ? err.message : String(err);
+    }
+  }
 
   if (values["json"]) {
     console.log(JSON.stringify(created));
@@ -875,6 +883,10 @@ Flags:
       `${green("Created")} ${cyan("#" + created.iid)} ${bold(created.title)}`
     );
     console.log(dim(created.webUrl));
+  }
+
+  if (followUpError) {
+    die(`#${created.iid} was created, but time tracking was not set: ${followUpError}`);
   }
 }
 
@@ -1197,19 +1209,8 @@ async function buildUpdateInput(
     };
   }
 
-  if (fields.estimate !== undefined || fields.spend !== undefined) {
-    const tw: NonNullable<WorkItemUpdateInput["timeTrackingWidget"]> = {};
-    if (fields.estimate !== undefined) {
-      tw.timeEstimate = validateDuration(fields.estimate);
-    }
-    if (fields.spend !== undefined) {
-      tw.timelog = {
-        timeSpent: validateDuration(fields.spend),
-        ...(fields.spendSummary ? { summary: fields.spendSummary } : {}),
-      };
-    }
-    updateInput.timeTrackingWidget = tw;
-  }
+  const tw = buildTimeTrackingWidget(fields);
+  if (tw) updateInput.timeTrackingWidget = tw;
 
   return updateInput;
 }

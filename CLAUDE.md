@@ -34,7 +34,8 @@ bun test        # все тесты зелёные, тесты не ходят �
 - Используется **только GraphQL Work Items API** (`workItemCreate`/`workItemUpdate`) — статусы задач (To do / In progress / Done) существуют только там, в REST v4 их нет. Не переводи на REST.
 - Аргумент `state` в списках — enum `IssuableState` с **lowercase**-значениями (`opened`/`closed`); а вот `WorkItem.state` в ответах — `OPEN`/`CLOSED`. Сравнивай через `isOpenState`.
 - `WorkItemUpdateInput.labelsWidget` умеет только `addLabelIds`/`removeLabelIds` — операция «установить метки» реализована как диff с текущими.
-- `--estimate` и `--spend` в одном вызове должны попадать в **один** объект `timeTrackingWidget` (см. `buildUpdateInput`), иначе одно затрёт другое.
+- `--estimate` и `--spend` в одном вызове должны попадать в **один** объект `timeTrackingWidget` (см. `buildTimeTrackingWidget`), иначе одно затрёт другое.
+- В `WorkItemCreateInput` **нет** `timeTrackingWidget` (сервер отвечает «Field is not defined»). Оценка и списание при `create` уходят вторым запросом `workItemUpdate`; тип `WorkItemCreateInput` этого поля не содержит, чтобы ошибку нельзя было вернуть.
 - Резолв статуса: сначала список с сервера (могут быть кастомные), затем фолбэк на системные gid `gid://gitlab/WorkItems::Statuses::SystemDefined::Status/1..5` (To do, In progress, Done, Won't do, Duplicate).
 - `iids` в GraphQL-запросах — массив **строк**.
 - В create-input включаются только те виджеты, которые пользователь реально задал.

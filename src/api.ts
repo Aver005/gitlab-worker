@@ -767,10 +767,6 @@ interface WidgetInput {
     dueDate: string | null;
   };
   statusWidget?: { status: string };
-  timeTrackingWidget?: {
-    timeEstimate?: string;
-    timelog?: { timeSpent: string; summary?: string };
-  };
   hierarchyWidget?: {
     // Set the parent work item (null clears it) and/or add children.
     parentId?: string | null;
@@ -778,6 +774,12 @@ interface WidgetInput {
   };
 }
 
+export interface TimeTrackingWidgetInput {
+  timeEstimate?: string;
+  timelog?: { timeSpent: string; summary?: string };
+}
+
+// WorkItemCreateInput has no timeTrackingWidget — estimate/spend go in a follow-up update.
 export interface WorkItemCreateInput extends WidgetInput {
   title: string;
   workItemTypeId: string;
@@ -789,6 +791,29 @@ export interface WorkItemUpdateInput extends WidgetInput {
   id: string;
   title?: string;
   stateEvent?: "CLOSE" | "REOPEN";
+  timeTrackingWidget?: TimeTrackingWidgetInput;
+}
+
+export interface TimeTrackingFields {
+  estimate?: string;
+  spend?: string;
+  spendSummary?: string;
+}
+
+/** Estimate and spend must share one timeTrackingWidget, or one overwrites the other. */
+export function buildTimeTrackingWidget(
+  fields: TimeTrackingFields
+): TimeTrackingWidgetInput | undefined {
+  if (fields.estimate === undefined && fields.spend === undefined) return undefined;
+  const tw: TimeTrackingWidgetInput = {};
+  if (fields.estimate !== undefined) tw.timeEstimate = validateDuration(fields.estimate);
+  if (fields.spend !== undefined) {
+    tw.timelog = {
+      timeSpent: validateDuration(fields.spend),
+      ...(fields.spendSummary ? { summary: fields.spendSummary } : {}),
+    };
+  }
+  return tw;
 }
 
 interface MutationWorkItem {

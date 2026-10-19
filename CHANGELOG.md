@@ -3,6 +3,16 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версионирование — [SemVer](https://semver.org/lang/ru/).
 
+## [Unreleased]
+
+### Исправлено
+
+- `create` с `estimate` (во frontmatter или флагом) падал с ошибкой
+  `timeTrackingWidget ... is not defined on WorkItemCreateInput`: GitLab не
+  принимает учёт времени при создании. Теперь задача создаётся без оценки, а
+  оценка ставится вторым запросом в той же команде. Если второй запрос не
+  прошёл, команда сообщает номер созданной задачи и завершается с кодом 1
+
 ## [1.1.0] — 2026-07-03
 
 ### Добавлено
