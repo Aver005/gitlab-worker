@@ -103,6 +103,7 @@ If the user provides issue text inline rather than a file, write it to a temp
 | "оценка 1ч30м на 42" | `glw estimate 42 1h30m` |
 | "залогируй 1 час на 42" | `glw spend 42 1h` |
 | "залогируй 30м с описанием code review" | `glw spend 42 30m --summary "code review"` |
+| "спиши 4 часа на 42 за 15 октября" | `glw spend 42 4h --date 2026-10-15` |
 | "оценка 3 дня" | `glw estimate 42 3d` |
 
 ## Links & hierarchy (связи и иерархия)

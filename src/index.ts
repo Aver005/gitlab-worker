@@ -1097,6 +1097,7 @@ interface UpdateFields {
   due?: string; // "none" or date
   estimate?: string;
   spend?: string;
+  spendDate?: string;
   spendSummary?: string;
 }
 
@@ -1239,6 +1240,7 @@ async function cmdUpdate(args: string[]): Promise<void> {
       due: { type: "string" },
       estimate: { type: "string" },
       spend: { type: "string" },
+      date: { type: "string" },
       summary: { type: "string" },
       yes: { type: "boolean" },
       "dry-run": { type: "boolean" },
@@ -1274,6 +1276,7 @@ Field flags:
   --due <date|none>   Set due date (or "none" to clear)
   --estimate <dur>    Set time estimate
   --spend <dur>       Log time spent
+  --date YYYY-MM-DD   Day the time was spent (default: today)
   --summary <s>       Summary for time log
   --yes               Skip confirmation
   --dry-run           Preview without making changes
@@ -1317,8 +1320,11 @@ Field flags:
     due: getFlag(values, "due"),
     estimate: getFlag(values, "estimate"),
     spend: getFlag(values, "spend"),
+    spendDate: getFlag(values, "date"),
     spendSummary: getFlag(values, "summary"),
   };
+  // Fail on a bad duration/date before touching any item.
+  buildTimeTrackingWidget(fields);
 
   // Gather items
   let items: WorkItemNode[];
@@ -1872,6 +1878,7 @@ async function cmdSpend(args: string[]): Promise<void> {
     options: {
       project: { type: "string" },
       summary: { type: "string" },
+      date: { type: "string" },
       help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
@@ -1879,9 +1886,19 @@ async function cmdSpend(args: string[]): Promise<void> {
   });
 
   if (values["help"]) {
-    console.log(
-      `glw spend <iid> <dur> [--summary <s>]\n\nLog time spent. E.g.: glw spend 42 1h30m --summary "code review"`
-    );
+    console.log(`
+glw spend <iid> <dur> [--date YYYY-MM-DD] [--summary <s>]
+
+Log time spent.
+
+Flags:
+  --date YYYY-MM-DD   Day the time was spent (default: today)
+  --summary <s>       Summary for the time log
+
+Examples:
+  glw spend 42 1h30m --summary "code review"
+  glw spend 42 4h --date 2026-10-15
+`);
     return;
   }
 
@@ -1889,23 +1906,21 @@ async function cmdSpend(args: string[]): Promise<void> {
   const dur = positionals[1];
   if (!iid || !dur) die("Usage: glw spend <iid> <dur>");
 
+  const date = getFlag(values, "date");
+  const timeTracking = buildTimeTrackingWidget({
+    spend: dur,
+    spendDate: date,
+    spendSummary: getFlag(values, "summary"),
+  })!;
+
   const config = await resolveConfig(getFlag(values, "project"));
   const item = await getWorkItemByIid(config, iid);
-  const validated = validateDuration(dur);
-  const summary = getFlag(values, "summary");
 
-  await updateWorkItem(config, {
-    id: item.id,
-    timeTrackingWidget: {
-      timelog: {
-        timeSpent: validated,
-        ...(summary ? { summary } : {}),
-      },
-    },
-  });
+  await updateWorkItem(config, { id: item.id, timeTrackingWidget: timeTracking });
 
   console.log(
-    `${green("Time logged")} on ${cyan("#" + item.iid)}: ${bold(validated)}`
+    `${green("Time logged")} on ${cyan("#" + item.iid)}: ${bold(timeTracking.timelog!.timeSpent)}` +
+      (date ? ` (${date})` : "")
   );
 }
 

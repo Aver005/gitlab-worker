@@ -132,6 +132,7 @@ glw close 42 --comment "Реализовано в MR !123"
 ```bash
 glw estimate 42 2h
 glw spend 42 1h30m --summary "code review"
+glw spend 42 4h --date 2026-10-15              # задним числом
 ```
 
 **Связи и иерархия:**
@@ -319,7 +320,7 @@ glw s "bug" --state all --json
 
 **Выборка**: явные номера (`glw update 42 43`) **или** фильтры `--search <q>`, `--filter-assignee <u|@me>`, `--filter-label <l>`, `--state <s>`. При выборке фильтрами показывается список совпадений и запрашивается подтверждение (пропускается с `--yes`); `--dry-run` — только показать.
 
-**Поля**: `--title`, `--body` / `--body-file <f>`, `--status <имя>`, `--assignee <u|@me|none>`, `--labels <csv>` (заменить все), `--add-label` / `--remove-label` (повторяемые), `--weight <n|none>`, `--start <дата|none>`, `--due <дата|none>`, `--estimate <dur>`, `--spend <dur>` (+ `--summary`). Значение `none` очищает поле.
+**Поля**: `--title`, `--body` / `--body-file <f>`, `--status <имя>`, `--assignee <u|@me|none>`, `--labels <csv>` (заменить все), `--add-label` / `--remove-label` (повторяемые), `--weight <n|none>`, `--start <дата|none>`, `--due <дата|none>`, `--estimate <dur>`, `--spend <dur>` (+ `--summary`, `--date YYYY-MM-DD` — день списания, по умолчанию сегодня). Значение `none` очищает поле.
 
 При ошибке на отдельной задаче массовая операция продолжается, код выхода будет ненулевым.
 

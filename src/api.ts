@@ -776,7 +776,7 @@ interface WidgetInput {
 
 export interface TimeTrackingWidgetInput {
   timeEstimate?: string;
-  timelog?: { timeSpent: string; summary?: string };
+  timelog?: { timeSpent: string; spentAt?: string; summary?: string };
 }
 
 // WorkItemCreateInput has no timeTrackingWidget — estimate/spend go in a follow-up update.
@@ -797,6 +797,7 @@ export interface WorkItemUpdateInput extends WidgetInput {
 export interface TimeTrackingFields {
   estimate?: string;
   spend?: string;
+  spendDate?: string;
   spendSummary?: string;
 }
 
@@ -804,16 +805,31 @@ export interface TimeTrackingFields {
 export function buildTimeTrackingWidget(
   fields: TimeTrackingFields
 ): TimeTrackingWidgetInput | undefined {
+  if (fields.spendDate !== undefined && fields.spend === undefined) {
+    throw new Error(`A spend date needs a duration to log (--spend)`);
+  }
   if (fields.estimate === undefined && fields.spend === undefined) return undefined;
   const tw: TimeTrackingWidgetInput = {};
   if (fields.estimate !== undefined) tw.timeEstimate = validateDuration(fields.estimate);
   if (fields.spend !== undefined) {
     tw.timelog = {
       timeSpent: validateDuration(fields.spend),
+      ...(fields.spendDate !== undefined ? { spentAt: parseSpentDate(fields.spendDate) } : {}),
       ...(fields.spendSummary ? { summary: fields.spendSummary } : {}),
     };
   }
   return tw;
+}
+
+/** YYYY-MM-DD → ISO time at noon UTC, so the day doesn't shift in any user's timezone. */
+export function parseSpentDate(input: string): string {
+  const s = input.trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  const d = m ? new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, 12)) : null;
+  if (!d || d.toISOString().slice(0, 10) !== s) {
+    throw new Error(`Invalid date "${input}". Use YYYY-MM-DD, e.g. 2026-10-15`);
+  }
+  return d.toISOString().replace(".000Z", "Z");
 }
 
 interface MutationWorkItem {

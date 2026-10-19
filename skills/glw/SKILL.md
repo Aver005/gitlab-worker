@@ -123,7 +123,7 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
   --weight --start --due --estimate --status --confidential --type`.
 - **Edit fields** (`glw update`): `--title --body --body-file --status
   --assignee --labels(set,csv) --add-label(repeatable) --remove-label
-  --weight --start --due --estimate --spend --summary`. Clear a field with the
+  --weight --start --due --estimate --spend --summary --date`. Clear a field with the
   literal `none`: `--assignee none`, `--weight none`, `--start none`,
   `--due none`.
 - **Comment**: `glw comment <iid> "text"` or `--file <f>`; `--internal` for a
@@ -154,7 +154,9 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
 - **Duration** format (estimate/spend): `\d+[wdhm]` combos — `2h`, `30m`,
   `1h30m`, `3d`, `1w2d3h`.
 - **Time tracking**: `glw estimate <iid> <dur>`; `glw spend <iid> <dur>
-  [--summary "..."]`. Also settable via `update --estimate`/`--spend`.
+  [--summary "..."] [--date YYYY-MM-DD]`. Also settable via
+  `update --estimate`/`--spend`. `--date` books the time on a past day
+  (default: today).
 
 ## 5. Bulk operation protocol (imperative)
 

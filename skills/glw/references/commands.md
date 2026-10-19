@@ -267,6 +267,7 @@ Field flags:
 | `--estimate <dur>` | set time estimate |
 | `--spend <dur>` | log time spent |
 | `--summary <s>` | summary for the time log |
+| `--date YYYY-MM-DD` | day the time was spent (default: today); needs `--spend` |
 | `--yes` | skip confirmation (REQUIRED non-TTY on filter selection) |
 | `--dry-run` | preview matched items; make no changes |
 | `--project <path>` | override project |
@@ -384,13 +385,14 @@ glw estimate 42 3d
 
 ---
 
-## spend — `glw spend <iid> <dur> [--summary <s>]`
+## spend — `glw spend <iid> <dur> [--date YYYY-MM-DD] [--summary <s>]`
 
-Logs time spent.
+Logs time spent. `--date` books it on that day instead of today.
 
 ```bash
 glw spend 42 1h
 glw spend 42 30m --summary "code review"
+glw spend 42 4h --date 2026-10-15
 ```
 
 ---
