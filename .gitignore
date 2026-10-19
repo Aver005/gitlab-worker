@@ -5,3 +5,4 @@ build
 node_modules
 glw.config.json
 .env*
+.trae/rules/git-commit-message.md
