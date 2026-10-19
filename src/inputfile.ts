@@ -289,6 +289,18 @@ function parseJson(content: string): IssueFileData {
   return result;
 }
 
+/** Defined override values win over the file; extra labels are appended to the file's. */
+export function applyOverrides(
+  data: IssueFileData,
+  overrides: IssueFileData,
+  extraLabels: string[] = []
+): IssueFileData {
+  const defined = Object.entries(overrides).filter(([, v]) => v !== undefined);
+  const merged: IssueFileData = { ...data, ...Object.fromEntries(defined) };
+  if (extraLabels.length > 0) merged.labels = [...(data.labels ?? []), ...extraLabels];
+  return merged;
+}
+
 /**
  * Parse an issue file (markdown, text, or JSON) into structured data.
  */

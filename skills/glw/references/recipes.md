@@ -42,6 +42,7 @@ with `search`/`list --json`.
 | Request | Command |
 |---|---|
 | "создай задачу из issue.md", "create from file" | `glw create issue.md --json` |
+| "проверь файл задачи, ничего не создавая" | `glw create issue.md --dry-run --json` |
 | "...и назначь на меня" | `glw create issue.md --assignee @me --json` |
 | "...с меткой urgent и весом 5" | `glw create issue.md --label urgent --weight 5 --json` |
 | "...оценка 2 часа, дедлайн 31 июля" | `glw create issue.md --estimate 2h --due 2026-07-31 --json` |

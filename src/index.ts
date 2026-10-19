@@ -42,6 +42,7 @@ import {
   normalizeIid,
   validateDuration,
   buildTimeTrackingWidget,
+  isIsoDate,
   getAssignees,
   getLabels,
   getStatus,
@@ -57,8 +58,9 @@ import {
   type WorkItemUpdateInput,
   type WorkItemCreateInput,
   type WorkItemNode,
+  type TimeTrackingWidgetInput,
 } from "./api.ts";
-import { parseIssueFile } from "./inputfile.ts";
+import { parseIssueFile, applyOverrides, type IssueFileData } from "./inputfile.ts";
 import {
   formatIssueLine,
   isOpenState,
@@ -794,6 +796,129 @@ Examples:
   }
 }
 
+// ─── Create helpers ───────────────────────────────────────────────────────────
+
+interface CreatePlan {
+  input: WorkItemCreateInput;
+  timeTracking?: TimeTrackingWidgetInput;
+  problems: string[];
+}
+
+/** Resolve names to gids without sending anything; collects every problem instead of stopping at the first. */
+async function planCreate(config: Config, data: IssueFileData): Promise<CreatePlan> {
+  const problems: string[] = [];
+  const attempt = async <T>(fn: () => Promise<T> | T): Promise<T | undefined> => {
+    try {
+      return await fn();
+    } catch (err) {
+      problems.push(err instanceof Error ? err.message : String(err));
+      return undefined;
+    }
+  };
+
+  if (!data.title) problems.push(`No title found. Add a title to the file or use --title.`);
+
+  const input: WorkItemCreateInput = {
+    title: data.title ?? "",
+    workItemTypeId: (await attempt(() => resolveWorkItemType(config, data.type ?? "Issue"))) ?? "",
+    namespacePath: config.project,
+  };
+
+  if (data.confidential) input.confidential = true;
+  if (data.description) input.descriptionWidget = { description: data.description };
+
+  if (data.assignees && data.assignees.length > 0) {
+    const users = await Promise.all(
+      data.assignees.map((a) => attempt(() => resolveUser(config, a)))
+    );
+    const ids = users.flatMap((u) => (u ? [u.id] : []));
+    if (ids.length > 0) input.assigneesWidget = { assigneeIds: ids };
+  }
+
+  if (data.labels && data.labels.length > 0) {
+    warnScopedLabelConflicts(data.labels);
+    const labelIds = await attempt(() => resolveLabels(config, data.labels!));
+    if (labelIds && labelIds.length > 0) input.labelsWidget = { labelIds };
+  }
+
+  if (data.weight !== undefined) {
+    if (Number.isInteger(data.weight)) input.weightWidget = { weight: data.weight };
+    else problems.push(`Invalid weight "${data.weight}". Expected a whole number`);
+  }
+
+  for (const [key, value] of [["start", data.start], ["due", data.due]] as const) {
+    if (value !== undefined && !isIsoDate(value)) {
+      problems.push(`Invalid ${key} date "${value}". Use YYYY-MM-DD`);
+    }
+  }
+  if (data.start || data.due) {
+    input.startAndDueDateWidget = {
+      isFixed: true,
+      startDate: data.start ?? null,
+      dueDate: data.due ?? null,
+    };
+  }
+
+  if (data.status) {
+    const statusGid = await attempt(() => resolveStatus(config, data.status!));
+    if (statusGid) input.statusWidget = { status: statusGid };
+  }
+
+  const timeTracking = await attempt(() => buildTimeTrackingWidget(data));
+  return { input, timeTracking, problems };
+}
+
+/** Time tracking can't go into workItemCreate, so it follows as an update. */
+async function executeCreate(
+  config: Config,
+  plan: CreatePlan
+): Promise<{ created: Awaited<ReturnType<typeof createWorkItem>>; followUpError?: string }> {
+  const created = await createWorkItem(config, plan.input);
+  if (!plan.timeTracking) return { created };
+  try {
+    await updateWorkItem(config, { id: created.id, timeTrackingWidget: plan.timeTracking });
+    return { created };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { created, followUpError: `#${created.iid} was created, but time tracking was not set: ${msg}` };
+  }
+}
+
+function createRows(d: IssueFileData): Array<[string, string | undefined]> {
+  const descLines = d.description?.split("\n") ?? [];
+  return [
+    ["Title", d.title],
+    ["Type", d.type ?? "Issue"],
+    ["Labels", d.labels?.join(", ")],
+    ["Assignees", d.assignees?.join(", ")],
+    ["Weight", d.weight?.toString()],
+    ["Start", d.start],
+    ["Due", d.due],
+    ["Status", d.status],
+    ["Estimate", d.estimate],
+    ["Spend", d.spend],
+    ["Spend date", d.spendDate],
+    ["Spend summary", d.spendSummary],
+    ["Confidential", d.confidential ? "yes" : undefined],
+    ["Description", d.description ? `${descLines.length} line(s): ${descLines[0]!.slice(0, 60)}` : undefined],
+  ];
+}
+
+/** Final values, with a marker on those that came from flags rather than the file. */
+function printCreatePlan(file: string, parsed: IssueFileData, data: IssueFileData, problems: string[]): void {
+  console.log(`\n${bold(file)} ${dim("(dry-run, nothing sent)")}`);
+  const fromFile = new Map(createRows(parsed));
+  const rows: Array<[string, string]> = [];
+  for (const [key, value] of createRows(data)) {
+    if (value === undefined) continue;
+    const old = fromFile.get(key);
+    const note = value === old ? "" : dim(old === undefined ? "  ← flag" : `  ← flag (file: ${old})`);
+    rows.push([key, value + note]);
+  }
+  printTable(rows);
+  for (const p of problems) console.log(red(`  ✗ ${p}`));
+}
+
 // create
 async function cmdCreate(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -814,6 +939,7 @@ async function cmdCreate(args: string[]): Promise<void> {
       status: { type: "string" },
       confidential: { type: "boolean" },
       type: { type: "string" },
+      "dry-run": { type: "boolean" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
@@ -845,6 +971,7 @@ Flags:
   --status <name>     Set status (e.g. "In progress")
   --confidential      Mark as confidential
   --type <name>       Work item type (default: Issue)
+  --dry-run           Show parsed and final fields, check names on the server, send nothing
   --project <path>    Override project
   --json              Full created item, same shape as "view --json"
 `);
@@ -854,102 +981,45 @@ Flags:
   const filePath = positionals[0];
   if (!filePath) die("Usage: glw create <file>");
 
+  const overrides: IssueFileData = {
+    title: getFlag(values, "title"),
+    confidential: values["confidential"] ? true : undefined,
+    weight: values["weight"] !== undefined ? Number(values["weight"]) : undefined,
+    start: getFlag(values, "start"),
+    due: getFlag(values, "due"),
+    estimate: getFlag(values, "estimate"),
+    spend: getFlag(values, "spend"),
+    spendDate: getFlag(values, "date"),
+    spendSummary: getFlag(values, "summary"),
+    status: getFlag(values, "status"),
+    type: getFlag(values, "type"),
+    assignees: values["assignee"] ? [values["assignee"] as string] : undefined,
+  };
+  const extraLabels = [
+    ...getMultiFlag(values, "label"),
+    ...(getFlag(values, "labels")?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
+  ];
+
   const config = await resolveConfig(getFlag(values, "project"));
 
-  let fileData = parseIssueFile(filePath);
+  const parsed = parseIssueFile(filePath);
+  const data = applyOverrides(parsed, overrides, extraLabels);
+  const plan = await planCreate(config, data);
 
-  // CLI flags override file values
-  if (values["title"]) fileData.title = values["title"] as string;
-  if (values["confidential"]) fileData.confidential = true;
-  if (values["weight"]) fileData.weight = parseInt(values["weight"] as string, 10);
-  if (values["start"]) fileData.start = values["start"] as string;
-  if (values["due"]) fileData.due = values["due"] as string;
-  if (values["estimate"]) fileData.estimate = values["estimate"] as string;
-  if (values["spend"]) fileData.spend = values["spend"] as string;
-  if (values["date"]) fileData.spendDate = values["date"] as string;
-  if (values["summary"]) fileData.spendSummary = values["summary"] as string;
-  if (values["status"]) fileData.status = values["status"] as string;
-  if (values["type"]) fileData.type = values["type"] as string;
-  if (values["assignee"]) fileData.assignees = [values["assignee"] as string];
-
-  // Merge labels
-  const extraLabels: string[] = [];
-  const labelFlags = getMultiFlag(values, "label");
-  if (labelFlags.length > 0) extraLabels.push(...labelFlags);
-  if (values["labels"]) {
-    extraLabels.push(...(values["labels"] as string).split(",").map((s) => s.trim()).filter(Boolean));
-  }
-  if (extraLabels.length > 0) {
-    fileData.labels = [...(fileData.labels ?? []), ...extraLabels];
-  }
-
-  if (!fileData.title) {
-    die(
-      `No title found. Add a title to the file or use --title.`
-    );
-  }
-
-  // Resolve type
-  const typeName = fileData.type ?? "Issue";
-  const workItemTypeId = await resolveWorkItemType(config, typeName);
-
-  // Build input
-  const createInput: WorkItemCreateInput = {
-    title: fileData.title,
-    workItemTypeId,
-    namespacePath: config.project,
-  };
-
-  if (fileData.confidential) createInput.confidential = true;
-
-  if (fileData.description) {
-    createInput.descriptionWidget = { description: fileData.description };
-  }
-
-  if (fileData.assignees && fileData.assignees.length > 0) {
-    const users = await Promise.all(
-      fileData.assignees.map((a) => resolveUser(config, a))
-    );
-    const ids = users.filter((u) => u !== null).map((u) => u!.id);
-    if (ids.length > 0) createInput.assigneesWidget = { assigneeIds: ids };
-  }
-
-  if (fileData.labels && fileData.labels.length > 0) {
-    warnScopedLabelConflicts(fileData.labels);
-    const labelIds = await resolveLabels(config, fileData.labels);
-    if (labelIds.length > 0) createInput.labelsWidget = { labelIds };
-  }
-
-  if (fileData.weight !== undefined) {
-    createInput.weightWidget = { weight: fileData.weight };
-  }
-
-  if (fileData.start || fileData.due) {
-    createInput.startAndDueDateWidget = {
-      isFixed: true,
-      startDate: fileData.start ?? null,
-      dueDate: fileData.due ?? null,
-    };
-  }
-
-  if (fileData.status) {
-    const statusGid = await resolveStatus(config, fileData.status);
-    createInput.statusWidget = { status: statusGid };
-  }
-
-  // Validate before creating so a bad duration doesn't leave a half-done item.
-  const timeTracking = buildTimeTrackingWidget(fileData);
-
-  const created = await createWorkItem(config, createInput);
-
-  let followUpError: string | undefined;
-  if (timeTracking) {
-    try {
-      await updateWorkItem(config, { id: created.id, timeTrackingWidget: timeTracking });
-    } catch (err) {
-      followUpError = err instanceof Error ? err.message : String(err);
+  if (values["dry-run"]) {
+    if (values["json"]) {
+      const { input, timeTracking, problems } = plan;
+      console.log(JSON.stringify({ file: filePath, parsed, final: data, input, timeTracking, problems }));
+    } else {
+      printCreatePlan(filePath, parsed, data, plan.problems);
     }
+    if (plan.problems.length > 0) process.exit(1);
+    return;
   }
+
+  if (plan.problems.length > 0) die(plan.problems.join("\n"));
+
+  const { created, followUpError } = await executeCreate(config, plan);
 
   if (values["json"]) {
     // Re-read so the output shows widgets as GitLab stored them, same shape as view --json.
@@ -961,9 +1031,7 @@ Flags:
     console.log(dim(created.webUrl));
   }
 
-  if (followUpError) {
-    die(`#${created.iid} was created, but time tracking was not set: ${followUpError}`);
-  }
+  if (followUpError) die(followUpError);
 }
 
 // list

@@ -114,7 +114,10 @@ To get an assignee's username: find the widget with `type == "ASSIGNEES"`, read
 Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings):
 `references/recipes.md`. Summary:
 
-- **Create from file**: `glw create <file>` (.md/.txt/.json). MD/txt supports a
+- **Create from file**: `glw create <file>` (.md/.txt/.json). Run
+  `glw create <file> --dry-run --json` first when the file was written by hand
+  or by you: it resolves labels/users/status/type on the server, sends
+  nothing, and lists every problem in `problems` (exit 1 if any). MD/txt supports a
   YAML frontmatter block between `---` lines with keys: `title`, `labels`,
   `assignees`/`assignee`, `weight`, `estimate`, `spend`, `spend_date`,
   `spend_summary`, `start`/`start_date`, `due`/`due_date`, `status`,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { buildTimeTrackingWidget, parseSpentDate } from "../src/api.ts";
+import { buildTimeTrackingWidget, parseSpentDate, isIsoDate } from "../src/api.ts";
 
 describe("buildTimeTrackingWidget", () => {
   it("returns undefined when nothing is set", () => {
@@ -49,5 +49,15 @@ describe("parseSpentDate", () => {
     for (const bad of ["2026-1-5", "15.10.2026", "2026-02-30", "2025-02-29", "2026-13-01", "today", ""]) {
       expect(() => parseSpentDate(bad)).toThrow(/YYYY-MM-DD/);
     }
+  });
+});
+
+describe("isIsoDate", () => {
+  it("accepts real calendar days only", () => {
+    expect(isIsoDate("2026-10-19")).toBe(true);
+    expect(isIsoDate("2024-02-29")).toBe(true);
+    expect(isIsoDate("2025-02-29")).toBe(false);
+    expect(isIsoDate("2026-10-1")).toBe(false);
+    expect(isIsoDate(" 2026-10-19")).toBe(false);
   });
 });

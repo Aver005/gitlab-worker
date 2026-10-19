@@ -215,6 +215,7 @@ frontmatter/fields.
 | `--status <name>` | status (e.g. `"In progress"`) |
 | `--confidential` | mark confidential |
 | `--type <name>` | work item type (default `Issue`) |
+| `--dry-run` | show parsed/final fields and check names on the server; send nothing |
 | `--project <path>` | override project |
 | `--json` | full created node, same shape as `view --json` (widgets included) |
 
@@ -261,7 +262,16 @@ Implement JWT authorization.
 glw create issue.md
 glw create issue.md --title "Other title" --assignee @me --label urgent
 glw create issue.json --project acme/other-project --json
+glw create issue.md --dry-run
 ```
+
+`--dry-run` sends nothing. It prints the final fields (values that came from
+flags rather than the file are marked `← flag (file: ...)`), resolves labels,
+assignees, status and type on the server (read-only), validates durations and
+dates, and lists every problem at once; exit code 1 if there are any. With
+`--json`: `{ file, parsed, final, input, timeTracking, problems }` where
+`parsed` is the file alone, `final` is after flags, `input` is the exact
+`workItemCreateInput`.
 
 ---
 

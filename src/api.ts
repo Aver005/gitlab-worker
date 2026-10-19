@@ -900,12 +900,17 @@ export function buildTimeTrackingWidget(
 /** YYYY-MM-DD → ISO time at noon UTC, so the day doesn't shift in any user's timezone. */
 export function parseSpentDate(input: string): string {
   const s = input.trim();
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  const d = m ? new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, 12)) : null;
-  if (!d || d.toISOString().slice(0, 10) !== s) {
+  if (!isIsoDate(s)) {
     throw new Error(`Invalid date "${input}". Use YYYY-MM-DD, e.g. 2026-10-15`);
   }
-  return d.toISOString().replace(".000Z", "Z");
+  return `${s}T12:00:00Z`;
+}
+
+/** Strict YYYY-MM-DD that is also a real calendar day. */
+export function isIsoDate(s: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  return new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!)).toISOString().slice(0, 10) === s;
 }
 
 interface MutationWorkItem {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { parseIssueFile } from "../src/inputfile.ts";
+import { parseIssueFile, applyOverrides } from "../src/inputfile.ts";
 import { writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -303,5 +303,28 @@ Body`
     expect(result.spend).toBe("4h");
     expect(result.spendDate).toBe("2026-10-01");
     expect(result.spendSummary).toBe("s");
+  });
+});
+
+describe("applyOverrides", () => {
+  const base = { title: "File", labels: ["bug"], status: "To do", weight: 3 };
+
+  it("lets defined overrides win and keeps the rest", () => {
+    expect(applyOverrides(base, { status: "Done", title: undefined })).toEqual({
+      title: "File",
+      labels: ["bug"],
+      status: "Done",
+      weight: 3,
+    });
+  });
+
+  it("appends extra labels to the file's labels", () => {
+    expect(applyOverrides(base, {}, ["urgent"]).labels).toEqual(["bug", "urgent"]);
+    expect(applyOverrides({ title: "T" }, {}, ["a"]).labels).toEqual(["a"]);
+  });
+
+  it("does not mutate the input", () => {
+    applyOverrides(base, { title: "X" }, ["y"]);
+    expect(base).toEqual({ title: "File", labels: ["bug"], status: "To do", weight: 3 });
   });
 });
