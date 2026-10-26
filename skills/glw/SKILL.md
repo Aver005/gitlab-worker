@@ -73,7 +73,8 @@ Protocol — never `--yes` blindly on an unpreviewed filter:
 - **`update` by filter**: first run the *identical* command with `--dry-run`
   (no `--yes`). It prints the matched items without changing anything. Show the
   user the count + list. Then re-run replacing `--dry-run` with `--yes`.
-- **`close` by filter**: `--dry-run` is NOT a close flag. Preview by running the
+- **`close` by filter**: `close` has no `--dry-run` (passing it fails with
+  `Unknown option`). Preview by running the
   equivalent `glw search`/`glw list --json` with the same filter first, show the
   matched items, then run `glw close ... --yes`.
 - **Explicit iids** (`glw update 42 43 ...`, `glw close 42`): still prompt-gated
@@ -87,7 +88,7 @@ For anything you must reason over (counts, iids, statuses, assignees), pass
 it. Supported on: `whoami`, `projects`, `labels`, `search`, `list`, `mine`,
 `todos`, `view`, `create`, `link`, `parent`.
 
-JSON shape (verified against `src/api.ts`):
+JSON shape (verified against `src/api/work-item.ts`):
 
 - `list`/`search` → a JSON **array** of work-item nodes. `view`/`create` → a
   single node.
@@ -232,10 +233,13 @@ that duplicates the created items; rerun only the failed files.
 | `Issue #<n> not found in project "<p>"` | wrong iid/project | `search` to find the real iid |
 | `GitLab GraphQL error:` / `GitLab API error` / HTTP | server/auth/network | re-check token & url; report the message to user; do not retry blindly |
 | `Aborted.` after a filter update | non-TTY declined confirm | you forgot `--yes` (after previewing) — re-run with it |
+| `Unknown option '--x'` | flag not accepted by this command (flags are parsed strictly) | check `glw <cmd> --help`; nothing was sent |
+| `--limit must be a positive integer` / `--state must be one of: …` | bad flag value | fix the value; nothing was sent |
 
 ## 7. Anti-patterns (do not)
 
-- Do **not** invent flags. Every flag must appear in `--help`/`commands.md`.
+- Do **not** invent flags. Every flag must appear in `--help`/`commands.md`;
+  an unknown one aborts the command before any request.
 - Do **not** fall back to `glab`, raw GraphQL/REST `curl`, or `git` — only `glw`.
 - Do **not** guess iids — `search`/`list` first.
 - Do **not** run a bulk mutation without a preview.

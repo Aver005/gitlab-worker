@@ -5,9 +5,13 @@
 ## Обязательные проверки перед завершением любой задачи
 
 ```bash
-bun run check   # tsc --noEmit — должен быть чистым
-bun test        # все тесты зелёные, тесты не ходят в сеть
+bun run check          # tsc --noEmit — должен быть чистым
+bun run lint           # oxlint
+bun run format:check   # oxfmt: 4 пробела, одинарные кавычки, ширина 80
+bun test               # все тесты зелёные, тесты не ходят в сеть
 ```
+
+`oxfmt`/`oxlint` — dev-зависимости; runtime по-прежнему без зависимостей. Markdown форматтер не трогает (`.oxfmtrc.json`).
 
 ## ⚠️ Живой токен в рабочей директории
 
@@ -19,16 +23,20 @@ bun test        # все тесты зелёные, тесты не ходят �
 
 ## Карта модулей
 
-| Файл | Ответственность |
+| Где | Что |
 |---|---|
-| `src/index.ts` | Диспетчер команд, алиасы, парсинг флагов, интерактив (confirm, пейджер) |
-| `src/api.ts` | Все GraphQL-операции и резолверы имён → gid (labels/users/statuses/types/projects) с per-process кешами; чистые функции `pickProject`, `matchesSearch` |
-| `src/gql.ts` | GraphQL-клиент: POST `{url}/api/graphql`, `Authorization: Bearer` |
-| `src/config.ts` | Конфиг: `process.env` > локальный `.env` > локальный `glw.config.json` > глобальные `.env`/`glw.config.json` из `globalDir()` (`%APPDATA%/glw`, POSIX `~/.config/glw`) — глобальный слой активен только при `glw global on` (`settings.json` там же); `loadConfig(override?, requireProject)` |
-| `src/inputfile.ts` | Парсинг md/txt/json файлов задач, мини-YAML frontmatter |
-| `src/fields.ts` | Плоский вывод `--fields`: реестр полей, `parseFields`, `flattenItem`, таблица |
-| `src/format.ts` | ANSI-цвета (NO_COLOR/TTY-aware), `isOpenState`, `secondsToHuman`, `chunk` |
-| `src/cache.ts` | Кеш путей проектов `<globalDir>/projects.json` для shell-автокомплита (читает и легаси `~/.glw/`; best-effort, ошибки записи молча глотаются) |
+| `src/index.ts` | Точка входа: `--help`, поиск команды в реестре, единственное место, где ошибка превращается в `Error: …` и код выхода 1 |
+| `src/commands/` | По файлу на команду (`estimate`/`spend` — `time.ts`). `registry.ts` — список команд, из него собираются общая справка и автодополнение; новая команда добавляется только туда. `create-plan.ts`/`create-batch.ts` и `update-input.ts` — логика `create`/`update` |
+| `src/cli/` | Общее для команд: `args.ts` (строгий `parseFlags`, `intFlag`, `oneOf`), `selection.ts` (iid или фильтры + превью для `update`/`close`), `output.ts` (вывод списков, `forEachItem` для пачек), `prompt.ts` (подтверждение, пейджер), `context.ts` (конфиг с `--project`) |
+| `src/api/` | GraphQL: `client.ts` (`gql`, `paginate`, `optionalArgs`, `checkPayload`), `work-item.ts` (тип узла и чтение виджетов, чистые фильтры), `work-items.ts` (запросы и мутации задач), резолверы имён → gid с кешами на процесс (`labels`, `users`, `statuses`, `item-types`, `projects`), `links.ts`, `todos.ts`, `time-tracking.ts` |
+| `src/config/` | `load.ts` — слои конфига: `process.env` > локальные `.env`/`glw.config.json` > глобальные из `globalDir()` (только при `glw global on`); `global.ts` — глобальная папка и режим; `dotenv.ts` — разбор и правка `.env` |
+| `src/inputfile.ts` | Файлы задач md/txt/json, мини-YAML шапка |
+| `src/fields.ts` | Плоский вывод `--fields` |
+| `src/format.ts` | ANSI-цвета (NO_COLOR/TTY), `isOpenState`, `secondsToHuman`, `chunk` |
+| `src/cache.ts` | Кеш путей проектов для автодополнения |
+| `src/errors.ts` | `CliError` — ошибка пользователя без стека |
+
+Команда не вызывает `process.exit`: сбой — `throw`, частичный сбой пачки — `process.exitCode = 1` (через `forEachItem`). Флаги разбираются строго: неизвестный флаг — ошибка до загрузки конфига.
 
 ## Неочевидные инварианты GitLab GraphQL (не ломай)
 

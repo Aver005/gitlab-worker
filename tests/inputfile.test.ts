@@ -1,31 +1,36 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { parseIssueFile, applyOverrides, expandIssueFiles } from "../src/inputfile.ts";
-import { writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
-const TMP = join(import.meta.dir, "__tmp__");
+import {
+    parseIssueFile,
+    applyOverrides,
+    expandIssueFiles,
+} from '../src/inputfile.ts';
+
+const TMP = join(import.meta.dir, '__tmp__');
 
 beforeAll(() => {
-  mkdirSync(TMP, { recursive: true });
+    mkdirSync(TMP, { recursive: true });
 });
 
 afterAll(() => {
-  if (existsSync(TMP)) rmSync(TMP, { recursive: true });
+    if (existsSync(TMP)) rmSync(TMP, { recursive: true });
 });
 
 function write(name: string, content: string): string {
-  const p = join(TMP, name);
-  writeFileSync(p, content);
-  return p;
+    const p = join(TMP, name);
+    writeFileSync(p, content);
+    return p;
 }
 
 // ─── Markdown tests ───────────────────────────────────────────────────────────
 
-describe("parseIssueFile — markdown with frontmatter", () => {
-  it("parses all recognized frontmatter fields", () => {
-    const f = write(
-      "full.md",
-      `---
+describe('parseIssueFile — markdown with frontmatter', () => {
+    it('parses all recognized frontmatter fields', () => {
+        const f = write(
+            'full.md',
+            `---
 title: My Issue
 labels: bug, feature
 assignee: johndoe
@@ -38,103 +43,110 @@ confidential: true
 type: Task
 ---
 Body content here.
-`
-    );
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("My Issue");
-    expect(result.labels).toEqual(["bug", "feature"]);
-    expect(result.assignees).toEqual(["johndoe"]);
-    expect(result.weight).toBe(5);
-    expect(result.estimate).toBe("2h");
-    expect(result.start).toBe("2026-07-01");
-    expect(result.due).toBe("2026-07-31");
-    expect(result.status).toBe("In progress");
-    expect(result.confidential).toBe(true);
-    expect(result.type).toBe("Task");
-    expect(result.description).toBe("Body content here.");
-  });
+`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('My Issue');
+        expect(result.labels).toEqual(['bug', 'feature']);
+        expect(result.assignees).toEqual(['johndoe']);
+        expect(result.weight).toBe(5);
+        expect(result.estimate).toBe('2h');
+        expect(result.start).toBe('2026-07-01');
+        expect(result.due).toBe('2026-07-31');
+        expect(result.status).toBe('In progress');
+        expect(result.confidential).toBe(true);
+        expect(result.type).toBe('Task');
+        expect(result.description).toBe('Body content here.');
+    });
 
-  it("uses # H1 as title when no frontmatter title", () => {
-    const f = write(
-      "h1title.md",
-      `---
+    it('uses # H1 as title when no frontmatter title', () => {
+        const f = write(
+            'h1title.md',
+            `---
 labels: bug
 ---
 # This Is The Title
 
 Some description content.
-`
-    );
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("This Is The Title");
-    expect(result.labels).toEqual(["bug"]);
-    expect(result.description).toBe("Some description content.");
-  });
+`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('This Is The Title');
+        expect(result.labels).toEqual(['bug']);
+        expect(result.description).toBe('Some description content.');
+    });
 
-  it("handles inline array labels in frontmatter", () => {
-    const f = write(
-      "inline-array.md",
-      `---
+    it('handles inline array labels in frontmatter', () => {
+        const f = write(
+            'inline-array.md',
+            `---
 title: Test
 labels: [alpha, beta, gamma]
 ---
 desc
-`
-    );
-    const result = parseIssueFile(f);
-    expect(result.labels).toEqual(["alpha", "beta", "gamma"]);
-  });
+`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.labels).toEqual(['alpha', 'beta', 'gamma']);
+    });
 
-  it("handles quoted string values", () => {
-    const f = write(
-      "quoted.md",
-      `---
+    it('handles quoted string values', () => {
+        const f = write(
+            'quoted.md',
+            `---
 title: "Quoted Title"
 status: 'To do'
 ---
-`
-    );
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("Quoted Title");
-    expect(result.status).toBe("To do");
-  });
+`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('Quoted Title');
+        expect(result.status).toBe('To do');
+    });
 
-  it("returns description as undefined when body is empty", () => {
-    const f = write(
-      "empty-body.md",
-      `---
+    it('returns description as undefined when body is empty', () => {
+        const f = write(
+            'empty-body.md',
+            `---
 title: No Body
 ---
-`
-    );
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("No Body");
-    expect(result.description).toBeUndefined();
-  });
+`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('No Body');
+        expect(result.description).toBeUndefined();
+    });
 
-  it("no frontmatter — uses H1 as title", () => {
-    const f = write(
-      "no-fm.md",
-      `# Simple Title
+    it('no frontmatter — uses H1 as title', () => {
+        const f = write(
+            'no-fm.md',
+            `# Simple Title
 
 Just a description.
-`
-    );
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("Simple Title");
-    expect(result.description).toBe("Just a description.");
-  });
+`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('Simple Title');
+        expect(result.description).toBe('Just a description.');
+    });
+
+    it('removes the H1 itself, not the same text inside an earlier ## heading', () => {
+        const f = write('h2-first.md', `## Title\n\n# Title\n\nBody`);
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('Title');
+        expect(result.description).toBe('## Title\n\n\n\nBody');
+    });
 });
 
 // ─── GitLab issue-template edge case ─────────────────────────────────────────
 
-describe("parseIssueFile — GitLab issue-template frontmatter (edge case)", () => {
-  it("treats unrecognized frontmatter as body (GitLab template metadata)", () => {
-    // This simulates a GitLab issue template that starts with ---name:...\n---
-    // which should NOT be treated as glw frontmatter
-    const f = write(
-      "gitlab-template.md",
-      `---
+describe('parseIssueFile — GitLab issue-template frontmatter (edge case)', () => {
+    it('treats unrecognized frontmatter as body (GitLab template metadata)', () => {
+        // This simulates a GitLab issue template that starts with ---name:...\n---
+        // which should NOT be treated as glw frontmatter
+        const f = write(
+            'gitlab-template.md',
+            `---
 name: Bug Report
 about: Report a reproducible bug
 title: "[BUG] "
@@ -145,20 +157,20 @@ assignees: ""
 ## Describe the bug
 
 A clear description.
-`
-    );
-    // "name", "about" are not recognized keys.
-    // BUT "title" and "labels" ARE recognized — this block WILL be parsed as glw frontmatter.
-    // That's correct behavior per spec: "if it contains at least one recognized key"
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("[BUG] ");
-    expect(result.labels).toEqual(["bug"]);
-  });
+`,
+        );
+        // "name", "about" are not recognized keys.
+        // BUT "title" and "labels" ARE recognized — this block WILL be parsed as glw frontmatter.
+        // That's correct behavior per spec: "if it contains at least one recognized key"
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('[BUG] ');
+        expect(result.labels).toEqual(['bug']);
+    });
 
-  it("pure template metadata with NO recognized keys — full content becomes body, H1 still extracted", () => {
-    const f = write(
-      "pure-template.md",
-      `---
+    it('pure template metadata with NO recognized keys — full content becomes body, H1 still extracted', () => {
+        const f = write(
+            'pure-template.md',
+            `---
 name: Feature Request
 about: Suggest an idea
 category: enhancement
@@ -167,23 +179,23 @@ category: enhancement
 # Feature: Something
 
 Please describe the feature.
-`
-    );
-    // "name", "about", "category" are not recognized → whole content treated as body
-    // H1 extraction then applies to that full content (including ---block)
-    const result = parseIssueFile(f);
-    // H1 "Feature: Something" is found inside the full-content body
-    expect(result.title).toBe("Feature: Something");
-    // description should not include the H1 heading itself
-    expect(result.description).toContain("Please describe the feature.");
-    // The --- block is part of the body content fed to H1 extraction, not a separate field
-    expect(result.labels).toBeUndefined();
-  });
+`,
+        );
+        // "name", "about", "category" are not recognized → whole content treated as body
+        // H1 extraction then applies to that full content (including ---block)
+        const result = parseIssueFile(f);
+        // H1 "Feature: Something" is found inside the full-content body
+        expect(result.title).toBe('Feature: Something');
+        // description should not include the H1 heading itself
+        expect(result.description).toContain('Please describe the feature.');
+        // The --- block is part of the body content fed to H1 extraction, not a separate field
+        expect(result.labels).toBeUndefined();
+    });
 
-  it("pure template with H1 after: title extracted from H1 in body", () => {
-    const f = write(
-      "pure-template-h1.md",
-      `---
+    it('pure template with H1 after: title extracted from H1 in body', () => {
+        const f = write(
+            'pure-template-h1.md',
+            `---
 name: Feature Request
 about: Suggest an idea
 ---
@@ -191,163 +203,196 @@ about: Suggest an idea
 # My Feature Title
 
 Feature body here.
-`
-    );
-    // No recognized keys → whole content is body → H1 extraction happens on full content
-    const result = parseIssueFile(f);
-    // The full content passed to body extraction includes the ---block + H1
-    // H1 "My Feature Title" should be found
-    expect(result.title).toBe("My Feature Title");
-    expect(result.description).toContain("Feature body here.");
-  });
+`,
+        );
+        // No recognized keys → whole content is body → H1 extraction happens on full content
+        const result = parseIssueFile(f);
+        // The full content passed to body extraction includes the ---block + H1
+        // H1 "My Feature Title" should be found
+        expect(result.title).toBe('My Feature Title');
+        expect(result.description).toContain('Feature body here.');
+    });
 });
 
 // ─── .txt tests ───────────────────────────────────────────────────────────────
 
-describe("parseIssueFile — .txt files", () => {
-  it("uses first line as title", () => {
-    const f = write("simple.txt", `First Line Is Title\n\nRest of the content.`);
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("First Line Is Title");
-    expect(result.description).toBe("Rest of the content.");
-  });
+describe('parseIssueFile — .txt files', () => {
+    it('uses first line as title', () => {
+        const f = write(
+            'simple.txt',
+            `First Line Is Title\n\nRest of the content.`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('First Line Is Title');
+        expect(result.description).toBe('Rest of the content.');
+    });
 
-  it("parses txt with frontmatter", () => {
-    const f = write(
-      "fm.txt",
-      `---
+    it('parses txt with frontmatter', () => {
+        const f = write(
+            'fm.txt',
+            `---
 title: Txt Issue
 weight: 3
 ---
 Description text.
-`
-    );
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("Txt Issue");
-    expect(result.weight).toBe(3);
-    expect(result.description).toBe("Description text.");
-  });
+`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('Txt Issue');
+        expect(result.weight).toBe(3);
+        expect(result.description).toBe('Description text.');
+    });
 });
 
 // ─── JSON tests ───────────────────────────────────────────────────────────────
 
-describe("parseIssueFile — JSON files", () => {
-  it("parses all fields", () => {
-    const f = write(
-      "issue.json",
-      JSON.stringify({
-        title: "JSON Issue",
-        description: "A description",
-        labels: ["a", "b"],
-        assignees: ["alice"],
-        weight: 8,
-        estimate: "3h",
-        start: "2026-07-01",
-        due: "2026-07-31",
-        status: "To do",
-        confidential: false,
-        type: "Issue",
-      })
-    );
-    const result = parseIssueFile(f);
-    expect(result.title).toBe("JSON Issue");
-    expect(result.description).toBe("A description");
-    expect(result.labels).toEqual(["a", "b"]);
-    expect(result.weight).toBe(8);
-    expect(result.estimate).toBe("3h");
-    expect(result.confidential).toBe(false);
-    expect(result.type).toBe("Issue");
-  });
+describe('parseIssueFile — JSON files', () => {
+    it('parses all fields', () => {
+        const f = write(
+            'issue.json',
+            JSON.stringify({
+                title: 'JSON Issue',
+                description: 'A description',
+                labels: ['a', 'b'],
+                assignees: ['alice'],
+                weight: 8,
+                estimate: '3h',
+                start: '2026-07-01',
+                due: '2026-07-31',
+                status: 'To do',
+                confidential: false,
+                type: 'Issue',
+            }),
+        );
+        const result = parseIssueFile(f);
+        expect(result.title).toBe('JSON Issue');
+        expect(result.description).toBe('A description');
+        expect(result.labels).toEqual(['a', 'b']);
+        expect(result.weight).toBe(8);
+        expect(result.estimate).toBe('3h');
+        expect(result.confidential).toBe(false);
+        expect(result.type).toBe('Issue');
+    });
 
-  it("accepts 'body' as alias for 'description'", () => {
-    const f = write(
-      "body-alias.json",
-      JSON.stringify({ title: "T", body: "Body text" })
-    );
-    const result = parseIssueFile(f);
-    expect(result.description).toBe("Body text");
-  });
+    it("accepts 'body' as alias for 'description'", () => {
+        const f = write(
+            'body-alias.json',
+            JSON.stringify({ title: 'T', body: 'Body text' }),
+        );
+        const result = parseIssueFile(f);
+        expect(result.description).toBe('Body text');
+    });
 });
 
-describe("parseIssueFile — spend keys", () => {
-  it("reads spend, spend_date and spend_summary from frontmatter", () => {
-    const f = write(
-      "spend.md",
-      `---
+describe('parseIssueFile — spend keys', () => {
+    it('reads spend, spend_date and spend_summary from frontmatter', () => {
+        const f = write(
+            'spend.md',
+            `---
 title: Logged
 spend: 1h30m
 spend_date: 2026-10-15
 spend_summary: "analysis, notes"
 ---
-Body`
-    );
-    const result = parseIssueFile(f);
-    expect(result.spend).toBe("1h30m");
-    expect(result.spendDate).toBe("2026-10-15");
-    expect(result.spendSummary).toBe("analysis, notes");
-  });
+Body`,
+        );
+        const result = parseIssueFile(f);
+        expect(result.spend).toBe('1h30m');
+        expect(result.spendDate).toBe('2026-10-15');
+        expect(result.spendSummary).toBe('analysis, notes');
+    });
 
-  it("counts spend alone as recognized frontmatter", () => {
-    const f = write("spend-only.md", `---\nspend: 2h\n---\n# Title\nBody`);
-    const result = parseIssueFile(f);
-    expect(result.spend).toBe("2h");
-    expect(result.title).toBe("Title");
-  });
+    it('counts spend alone as recognized frontmatter', () => {
+        const f = write('spend-only.md', `---\nspend: 2h\n---\n# Title\nBody`);
+        const result = parseIssueFile(f);
+        expect(result.spend).toBe('2h');
+        expect(result.title).toBe('Title');
+    });
 
-  it("reads spend keys from JSON", () => {
-    const f = write(
-      "spend.json",
-      JSON.stringify({ title: "T", spend: "4h", spend_date: "2026-10-01", spend_summary: "s" })
-    );
-    const result = parseIssueFile(f);
-    expect(result.spend).toBe("4h");
-    expect(result.spendDate).toBe("2026-10-01");
-    expect(result.spendSummary).toBe("s");
-  });
+    it('reads spend keys from JSON', () => {
+        const f = write(
+            'spend.json',
+            JSON.stringify({
+                title: 'T',
+                spend: '4h',
+                spend_date: '2026-10-01',
+                spend_summary: 's',
+            }),
+        );
+        const result = parseIssueFile(f);
+        expect(result.spend).toBe('4h');
+        expect(result.spendDate).toBe('2026-10-01');
+        expect(result.spendSummary).toBe('s');
+    });
 });
 
-describe("applyOverrides", () => {
-  const base = { title: "File", labels: ["bug"], status: "To do", weight: 3 };
+describe('applyOverrides', () => {
+    const base = { title: 'File', labels: ['bug'], status: 'To do', weight: 3 };
 
-  it("lets defined overrides win and keeps the rest", () => {
-    expect(applyOverrides(base, { status: "Done", title: undefined })).toEqual({
-      title: "File",
-      labels: ["bug"],
-      status: "Done",
-      weight: 3,
+    it('lets defined overrides win and keeps the rest', () => {
+        expect(
+            applyOverrides(base, { status: 'Done', title: undefined }),
+        ).toEqual({
+            title: 'File',
+            labels: ['bug'],
+            status: 'Done',
+            weight: 3,
+        });
     });
-  });
 
-  it("appends extra labels to the file's labels", () => {
-    expect(applyOverrides(base, {}, ["urgent"]).labels).toEqual(["bug", "urgent"]);
-    expect(applyOverrides({ title: "T" }, {}, ["a"]).labels).toEqual(["a"]);
-  });
+    it("appends extra labels to the file's labels", () => {
+        expect(applyOverrides(base, {}, ['urgent']).labels).toEqual([
+            'bug',
+            'urgent',
+        ]);
+        expect(applyOverrides({ title: 'T' }, {}, ['a']).labels).toEqual(['a']);
+    });
 
-  it("does not mutate the input", () => {
-    applyOverrides(base, { title: "X" }, ["y"]);
-    expect(base).toEqual({ title: "File", labels: ["bug"], status: "To do", weight: 3 });
-  });
+    it('does not mutate the input', () => {
+        applyOverrides(base, { title: 'X' }, ['y']);
+        expect(base).toEqual({
+            title: 'File',
+            labels: ['bug'],
+            status: 'To do',
+            weight: 3,
+        });
+    });
 });
 
-describe("expandIssueFiles", () => {
-  it("expands a directory to top-level issue files in natural order", () => {
-    const dir = join(TMP, "batch");
-    mkdirSync(join(dir, "nested"), { recursive: true });
-    for (const n of ["10-last.md", "2-second.json", "1-first.txt", "notes.yaml", "nested/skip.md"]) {
-      writeFileSync(join(dir, n), "# x");
-    }
-    expect(expandIssueFiles([dir])).toEqual({
-      files: [join(dir, "1-first.txt"), join(dir, "2-second.json"), join(dir, "10-last.md")],
-      fromDir: true,
+describe('expandIssueFiles', () => {
+    it('expands a directory to top-level issue files in natural order', () => {
+        const dir = join(TMP, 'batch');
+        mkdirSync(join(dir, 'nested'), { recursive: true });
+        for (const n of [
+            '10-last.md',
+            '2-second.json',
+            '1-first.txt',
+            'notes.yaml',
+            'nested/skip.md',
+        ]) {
+            writeFileSync(join(dir, n), '# x');
+        }
+        expect(expandIssueFiles([dir])).toEqual({
+            files: [
+                join(dir, '1-first.txt'),
+                join(dir, '2-second.json'),
+                join(dir, '10-last.md'),
+            ],
+            fromDir: true,
+        });
     });
-  });
 
-  it("passes files through and drops duplicates", () => {
-    const f = write("single.md", "# One");
-    expect(expandIssueFiles([f, f])).toEqual({ files: [f], fromDir: false });
-  });
+    it('passes files through and drops duplicates', () => {
+        const f = write('single.md', '# One');
+        expect(expandIssueFiles([f, f])).toEqual({
+            files: [f],
+            fromDir: false,
+        });
+    });
 
-  it("throws on a missing path", () => {
-    expect(() => expandIssueFiles([join(TMP, "nope.md")])).toThrow(/Cannot read file/);
-  });
+    it('throws on a missing path', () => {
+        expect(() => expandIssueFiles([join(TMP, 'nope.md')])).toThrow(
+            /Cannot read file/,
+        );
+    });
 });

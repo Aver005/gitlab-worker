@@ -1,28 +1,32 @@
-import { describe, it, expect } from "bun:test";
-import { chunk } from "../src/format.ts";
+import { describe, it, expect } from 'bun:test';
 
-describe("chunk", () => {
-  it("splits evenly", () => {
-    expect(chunk([1, 2, 3, 4], 2)).toEqual([[1, 2], [3, 4]]);
-  });
+import { chunk } from '../src/format.ts';
 
-  it("last chunk smaller", () => {
-    expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
-  });
+describe('chunk', () => {
+    it('splits evenly', () => {
+        expect(chunk([1, 2, 3, 4], 2)).toEqual([
+            [1, 2],
+            [3, 4],
+        ]);
+    });
 
-  it("size >= length returns single chunk", () => {
-    expect(chunk([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
-  });
+    it('last chunk smaller', () => {
+        expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+    });
 
-  it("size === 1 returns one item per chunk", () => {
-    expect(chunk(["a", "b", "c"], 1)).toEqual([["a"], ["b"], ["c"]]);
-  });
+    it('size >= length returns single chunk', () => {
+        expect(chunk([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
+    });
 
-  it("empty array returns empty array", () => {
-    expect(chunk([], 5)).toEqual([]);
-  });
+    it('size === 1 returns one item per chunk', () => {
+        expect(chunk(['a', 'b', 'c'], 1)).toEqual([['a'], ['b'], ['c']]);
+    });
 
-  it("size <= 0 returns single chunk", () => {
-    expect(chunk([1, 2, 3], 0)).toEqual([[1, 2, 3]]);
-  });
+    it('empty array returns empty array', () => {
+        expect(chunk([], 5)).toEqual([]);
+    });
+
+    it('size <= 0 returns single chunk', () => {
+        expect(chunk([1, 2, 3], 0)).toEqual([[1, 2, 3]]);
+    });
 });

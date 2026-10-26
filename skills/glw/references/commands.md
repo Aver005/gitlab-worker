@@ -2,8 +2,11 @@
 
 Derived verbatim from `glw <cmd> --help` and `src/`. Every flag here exists in
 the CLI. Global flags (where supported): `--project <ref>`, `--json`,
-`--help`/`-h`. Example project paths are fictional (`acme/...`,
-`gitlab.example.com`).
+`--help`/`-h`. Flags are parsed strictly: a flag the command does not list
+fails with `Unknown option '--x'` before any request. `--limit`/`--per-page`
+must be positive integers, `--state`/`--sort` one of the listed values. Issue
+numbers are accepted as `42` or `#42` everywhere. Example project paths are
+fictional (`acme/...`, `gitlab.example.com`).
 
 Config priority: `--project` flag > env (`GITLAB_URL`, `GITLAB_TOKEN`,
 `GITLAB_PROJECT`) > `.env` in cwd > `glw.config.json` in cwd > global `.env` >
@@ -200,7 +203,7 @@ values `null`. Unknown field names fail before any request.
 
 Work items assigned to the current user in **every** project they can see.
 Server-side filter (`currentUser.workItems`, GitLab 17.10+), no default project
-needed, `--project` is ignored. Human output is grouped by project; JSON is the
+needed, no `--project` flag. Human output is grouped by project; JSON is the
 same node array as `list` (with `namespace.fullPath`).
 
 | Flag | Default | Meaning |

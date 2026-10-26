@@ -1,0 +1,24 @@
+{
+    "$schema": "./node_modules/oxfmt/configuration_schema.json",
+    "printWidth": 80,
+    "tabWidth": 4,
+    "useTabs": false,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "endOfLine": "lf",
+    "sortImports": {
+        "groups": [
+            ["builtin", "external"],
+            ["internal", "subpath", "parent", "sibling", "index"],
+            "type",
+            "unknown"
+        ],
+        "newlinesBetween": true,
+        "order": "asc",
+        "ignoreCase": true,
+        "sortSideEffects": false
+    },
+    // Markdown пишется руками: переносы строк в README и навыке смысловые.
+    "ignorePatterns": ["**/*.md", ".dev/**", "tests/__tmp__/**"]
+}

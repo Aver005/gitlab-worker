@@ -1,15 +1,20 @@
 {
-  "name": "glw",
-  "version": "1.2.0",
-  "bin": {
-    "glw": "./src/index.ts"
-  },
-  "scripts": {
-    "check": "tsc --noEmit",
-    "test": "bun test"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.0.0"
-  }
+    "name": "glw",
+    "version": "1.2.0",
+    "bin": {
+        "glw": "./src/index.ts"
+    },
+    "scripts": {
+        "check": "tsc --noEmit",
+        "lint": "oxlint",
+        "format": "oxfmt .",
+        "format:check": "oxfmt --check .",
+        "test": "bun test"
+    },
+    "devDependencies": {
+        "@types/bun": "latest",
+        "oxfmt": "^0.74.0",
+        "oxlint": "^1.89.0",
+        "typescript": "^5.0.0"
+    }
 }
