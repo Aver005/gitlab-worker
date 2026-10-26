@@ -4,10 +4,11 @@ description: >-
   Operate the `glw` GitLab work-items CLI to manage issues/work items from
   natural-language requests: create/view/update/close/reopen issues, set
   status/assignee/labels/weight/dates, add comments, track time
-  (estimate/spend), search and bulk-edit by filter, and switch projects. Use
-  whenever the user wants to manage GitLab issues or work items, create/update/
-  close issues, do time tracking, run bulk issue operations, or explicitly says
-  "через glw" / "using glw".
+  (estimate/spend), search and bulk-edit by filter, list everything assigned
+  to the user across projects, read and clear the GitLab To-Do List, and switch
+  projects. Use whenever the user wants to manage GitLab issues or work items,
+  create/update/close issues, do time tracking, run bulk issue operations, asks
+  what is on them / their to-dos, or explicitly says "через glw" / "using glw".
 ---
 
 # glw — GitLab Work Items CLI
@@ -36,7 +37,7 @@ self-correct.
 2. **Auth** — `glw whoami --json`. Success prints `{"id","username","name"}`;
    note the username (used for "me"/"на мне"). Failure → see auth errors below.
 3. **Project set** — only needed for project-scoped commands (everything except
-   `whoami`, `projects`, `use`, `init`, `completion`). A quick probe:
+   `whoami`, `projects`, `use`, `init`, `completion`, `mine`, `todos`). A quick probe:
    `glw list --limit 1 --json`. If it errors with "GitLab project not
    configured", resolve the project (see below) before proceeding.
 
@@ -83,14 +84,15 @@ Protocol — never `--yes` blindly on an unpreviewed filter:
 
 For anything you must reason over (counts, iids, statuses, assignees), pass
 `--json`. Human output is colored and for showing the user only; do not parse
-it. Supported on: `whoami`, `projects`, `labels`, `search`, `list`, `view`,
-`create`, `link`, `parent`.
+it. Supported on: `whoami`, `projects`, `labels`, `search`, `list`, `mine`,
+`todos`, `view`, `create`, `link`, `parent`.
 
 JSON shape (verified against `src/api.ts`):
 
 - `list`/`search` → a JSON **array** of work-item nodes. `view`/`create` → a
   single node.
-- Node top-level: `{ "id", "iid", "title", "state", "webUrl", "widgets": [...] }`.
+- Node top-level: `{ "id", "iid", "title", "state", "webUrl", "namespace":
+  { "fullPath" }, "widgets": [...] }` (`namespace.fullPath` = project path).
   **`iid` is a string** (e.g. `"42"`); `state` is `"opened"`/`"closed"`.
 - Fields live in the `widgets` array, each keyed by `type`:
   - `DESCRIPTION` → `description`
@@ -109,12 +111,16 @@ JSON shape (verified against `src/api.ts`):
 To get an assignee's username: find the widget with `type == "ASSIGNEES"`, read
 `assignees.nodes[0].username`. `whoami --json` → `{id,username,name}`.
 
-**Prefer flat fields** when you only need a few values: `list`/`search`/`view`
+**Prefer flat fields** when you only need a few values: `list`/`search`/`mine`/`view`
 accept `--fields iid,title,status,labels,weight,estimate,spent --json` and
 return flat objects (`view`: one object) — no widget digging. `labels` and
 `assignees` are arrays of titles/usernames, `estimate`/`spent` are seconds,
 missing values are `null`. Available: `iid id title state status labels
-assignees weight start due estimate spent url description`.
+assignees weight start due estimate spent project url description`.
+
+`todos --json` is always flat: `[{ id, action, state, type, project, ref,
+title, targetState, author, createdAt, url, body }]` — `id` is the **to-do** id
+for `todos done`, not an iid; the item's iid is in `ref` (`acme/app#42`).
 
 ## 4. Intent → command mapping (canonical)
 
@@ -157,7 +163,16 @@ Full flag reference: `references/commands.md`. Intent cookbook (RU+EN phrasings)
   `--name` title-only; `--body` description-only; `--start_time`/`--start`
   `YYYY-MM-DD` >=; multiple filters combine with **AND**; `--state
   opened|closed|all` (default opened); `--limit` (default 200).
-- **List**: `--state --search --assignee --label --limit`(default 50).
+- **List**: `--state --search --assignee --label --limit`(default 50). One
+  project only, assignee/label filtered client-side over the fetched page.
+- **Everything assigned to me** ("что на мне", "мои задачи везде"): `glw mine
+  [--state] [--label]... [--limit] [--fields] --json` — all projects,
+  server-side. Iids repeat across projects: include `project` in `--fields`
+  and pass `--project <path>` when you then `view`/`update`/`close` an item.
+- **To-Do List** ("мой To-Do", "что от меня ждут", "где меня упомянули"):
+  `glw todos [--state pending|done|all] [--project <ref>] --json`. Mark done:
+  `glw todos done <id...>` (to-do ids from `id`); all pending: preview with
+  `glw todos --json`, then `glw todos done --all --yes`.
 - **Projects**: `glw projects [--search]` to discover; `glw use <name>` to set
   default; `--project <ref>` per command. `<ref>` = full `group/project` path
   or a unique short name.
@@ -270,3 +285,8 @@ that duplicates the created items; rerun only the failed files.
 **H. "пометь, что задача 42 блокирует 43 и 44"**
 1. `glw link 42 43 44 --type blocks`
 2. Confirm the relation (from #42 to the targets).
+
+**I. "что у меня в To-Do и что вообще на мне висит"**
+1. `glw todos --json` → group by `action` (assigned / mentioned / review_requested…).
+2. `glw mine --fields project,iid,title,status,due --json`.
+3. Report both lists; offer `glw todos done <id...>` for handled to-dos.

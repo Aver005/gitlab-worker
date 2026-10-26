@@ -3,6 +3,25 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версионирование — [SemVer](https://semver.org/lang/ru/).
 
+## [Unreleased]
+
+### Добавлено
+
+- `mine` — задачи, назначенные на текущего пользователя, во всех доступных
+  проектах одним запросом к серверу (`currentUser.workItems`, GitLab 17.10+).
+  Не требует проекта по умолчанию; `--state`, повторяемый `--label`, `--limit`,
+  `--fields`, `--json`; вывод сгруппирован по проектам
+- `todos` — GitLab To-Do List: `--state pending|done|all`, `--project`,
+  `--limit`, `--json` с плоскими объектами. `todos done <id...>` отмечает
+  записи сделанными, `todos done --all` — все ожидающие, с подтверждением
+  (`--yes` для скриптов)
+- Поле `project` в `--fields` — полный путь проекта задачи
+
+### Изменено
+
+- `list`, `search`, `view`, `create` в `--json` отдают ещё и
+  `namespace.fullPath`
+
 ## [1.2.0] — 2026-10-19
 
 ### Добавлено

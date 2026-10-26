@@ -9,6 +9,7 @@ export interface WorkItemNode {
   title: string;
   state: string;
   webUrl: string;
+  namespace?: { fullPath: string } | null;
   widgets: WidgetUnion[];
 }
 
@@ -206,9 +207,25 @@ const WORK_ITEM_WIDGETS_FRAGMENT = `
 `;
 
 const WORK_ITEM_CORE = `
-  id iid title state webUrl
+  id iid title state webUrl namespace { fullPath }
   ${WORK_ITEM_WIDGETS_FRAGMENT}
 `;
+
+// Lighter widget set for lists: description is opt-in, no hierarchy/links
+function listWidgets(includeDescription?: boolean): string {
+  return `
+    widgets {
+      type
+      ${includeDescription ? "... on WorkItemWidgetDescription { description }" : ""}
+      ... on WorkItemWidgetAssignees { assignees { nodes { id username name } } }
+      ... on WorkItemWidgetLabels { labels { nodes { id title } } }
+      ... on WorkItemWidgetStatus { status { id name } }
+      ... on WorkItemWidgetWeight { weight }
+      ... on WorkItemWidgetStartAndDueDate { startDate dueDate }
+      ... on WorkItemWidgetTimeTracking { timeEstimate totalTimeSpent }
+    }
+  `;
+}
 
 // ─── Project discovery ────────────────────────────────────────────────────────
 
@@ -748,29 +765,11 @@ export async function listWorkItems(
     variables["search"] = opts.search;
   }
 
-  // List query — optionally includes description widget
-  const descriptionFragment = opts.includeDescription
-    ? `... on WorkItemWidgetDescription { description }`
-    : "";
-
-  const WORK_ITEM_LIST_WIDGETS = `
-    widgets {
-      type
-      ${descriptionFragment}
-      ... on WorkItemWidgetAssignees { assignees { nodes { id username name } } }
-      ... on WorkItemWidgetLabels { labels { nodes { id title } } }
-      ... on WorkItemWidgetStatus { status { id name } }
-      ... on WorkItemWidgetWeight { weight }
-      ... on WorkItemWidgetStartAndDueDate { startDate dueDate }
-      ... on WorkItemWidgetTimeTracking { timeEstimate totalTimeSpent }
-    }
-  `;
-
   const query = `
     query (${queryArgs.join(", ")}) {
       project(fullPath: $fullPath) {
         workItems(${args.join(", ")}) {
-          nodes { id iid title state webUrl ${WORK_ITEM_LIST_WIDGETS} }
+          nodes { id iid title state webUrl namespace { fullPath } ${listWidgets(opts.includeDescription)} }
         }
       }
     }
@@ -781,6 +780,85 @@ export async function listWorkItems(
   }>(config, query, variables);
 
   return data.project?.workItems.nodes ?? [];
+}
+
+export interface ListMyWorkItemsOptions {
+  state?: "opened" | "closed" | "all";
+  labels?: string[];
+  limit?: number;
+  includeDescription?: boolean;
+}
+
+/** Work items assigned to the current user across all projects (GitLab 17.10+). */
+export async function listMyWorkItems(
+  config: Config,
+  opts: ListMyWorkItemsOptions = {}
+): Promise<WorkItemNode[]> {
+  const me = await getCurrentUser(config);
+  const maxItems = opts.limit ?? 100;
+
+  const args = [`assigneeUsernames: $assignees`, `first: $first`, `after: $after`];
+  const queryArgs = [`$assignees: [String!]`, `$first: Int!`, `$after: String`];
+  const variables: Record<string, unknown> = { assignees: [me.username] };
+
+  if (opts.state && opts.state !== "all") {
+    args.push("state: $state");
+    queryArgs.push("$state: IssuableState");
+    variables["state"] = opts.state;
+  }
+  if (opts.labels && opts.labels.length > 0) {
+    args.push("labelName: $labels");
+    queryArgs.push("$labels: [String!]");
+    variables["labels"] = opts.labels;
+  }
+
+  const query = `
+    query (${queryArgs.join(", ")}) {
+      currentUser {
+        workItems(${args.join(", ")}) {
+          pageInfo { hasNextPage endCursor }
+          nodes { id iid title state webUrl namespace { fullPath } ${listWidgets(opts.includeDescription)} }
+        }
+      }
+    }
+  `;
+
+  type Page = {
+    currentUser: {
+      workItems: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: WorkItemNode[];
+      } | null;
+    } | null;
+  };
+
+  const results: WorkItemNode[] = [];
+  let cursor: string | null = null;
+
+  while (results.length < maxItems) {
+    let data: Page;
+    try {
+      data = await gql<Page>(config, query, {
+        ...variables,
+        first: Math.min(100, maxItems - results.length),
+        after: cursor,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/doesn't exist on type 'CurrentUser'/.test(msg)) {
+        throw new Error(`This GitLab has no currentUser.workItems (needs 17.10+): ${msg}`);
+      }
+      throw err;
+    }
+
+    const page = data.currentUser?.workItems;
+    if (!page) break;
+    results.push(...page.nodes);
+    if (!page.pageInfo.hasNextPage || !page.pageInfo.endCursor) break;
+    cursor = page.pageInfo.endCursor;
+  }
+
+  return results.slice(0, maxItems);
 }
 
 // ─── Search predicate ─────────────────────────────────────────────────────────
@@ -1080,6 +1158,202 @@ export async function removeLinkedItems(
     throw new Error(res.message || `Unlinking work items returned no data`);
   }
   return res.workItem;
+}
+
+// ─── To-do items ──────────────────────────────────────────────────────────────
+// `target` is deprecated (can be null despite the schema) — read `targetEntity`.
+
+export interface TodoNode {
+  id: string;
+  action: string;
+  body: string;
+  state: string;
+  createdAt: string;
+  targetType: string;
+  targetUrl: string | null;
+  author: { username: string } | null;
+  project: { fullPath: string } | null;
+  group: { fullPath: string } | null;
+  targetEntity: {
+    name: string | null;
+    webUrl: string | null;
+    iid?: string;
+    // Aliased: Issue / WorkItem / MergeRequest states are different enums
+    issueState?: string;
+    workItemState?: string;
+    mrState?: string;
+  } | null;
+}
+
+export type TodoState = "pending" | "done" | "all";
+
+export interface ListTodosOptions {
+  state?: TodoState;
+  projectId?: string;
+  limit?: number;
+}
+
+export async function listTodos(
+  config: Config,
+  opts: ListTodosOptions = {}
+): Promise<TodoNode[]> {
+  const maxItems = opts.limit ?? 100;
+  const state = opts.state ?? "pending";
+
+  const args = [`state: $state`, `first: $first`, `after: $after`];
+  const queryArgs = [`$state: [TodoStateEnum!]`, `$first: Int!`, `$after: String`];
+  const variables: Record<string, unknown> = {
+    state: state === "all" ? ["pending", "done"] : [state],
+  };
+  if (opts.projectId) {
+    args.push("projectId: $projectId");
+    queryArgs.push("$projectId: [ID!]");
+    variables["projectId"] = [opts.projectId];
+  }
+
+  const query = `
+    query (${queryArgs.join(", ")}) {
+      currentUser {
+        todos(${args.join(", ")}) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id action body state createdAt targetType targetUrl
+            author { username }
+            project { fullPath }
+            group { fullPath }
+            targetEntity {
+              name webUrl
+              ... on Issue { iid issueState: state }
+              ... on WorkItem { iid workItemState: state }
+              ... on MergeRequest { iid mrState: state }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  type Page = {
+    currentUser: {
+      todos: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: TodoNode[];
+      } | null;
+    } | null;
+  };
+
+  const results: TodoNode[] = [];
+  let cursor: string | null = null;
+
+  while (results.length < maxItems) {
+    const data: Page = await gql<Page>(config, query, {
+      ...variables,
+      first: Math.min(100, maxItems - results.length),
+      after: cursor,
+    });
+    const page = data.currentUser?.todos;
+    if (!page) break;
+    results.push(...page.nodes);
+    if (!page.pageInfo.hasNextPage || !page.pageInfo.endCursor) break;
+    cursor = page.pageInfo.endCursor;
+  }
+
+  return results.slice(0, maxItems);
+}
+
+export async function markTodoDone(config: Config, id: string): Promise<void> {
+  const data = await gql<{
+    todoMarkDone: { todo: { id: string; state: string } | null; errors: string[] };
+  }>(
+    config,
+    `mutation ($id: TodoID!) {
+      todoMarkDone(input: { id: $id }) {
+        todo { id state }
+        errors
+      }
+    }`,
+    { id }
+  );
+
+  if (data.todoMarkDone.errors.length > 0) {
+    throw new Error(`Failed to mark to-do done: ${data.todoMarkDone.errors.join("; ")}`);
+  }
+}
+
+/** Marks every pending to-do (optionally of one project) done; returns how many. */
+export async function markAllTodosDone(config: Config, projectId?: string): Promise<number> {
+  const data = await gql<{
+    todosMarkAllDone: { todos: Array<{ id: string }>; errors: string[] };
+  }>(
+    config,
+    `mutation ($input: TodosMarkAllDoneInput!) {
+      todosMarkAllDone(input: $input) {
+        todos { id }
+        errors
+      }
+    }`,
+    { input: projectId ? { projectId: [projectId] } : {} }
+  );
+
+  const res = data.todosMarkAllDone;
+  if (res.errors.length > 0) {
+    throw new Error(`Failed to mark to-dos done: ${res.errors.join("; ")}`);
+  }
+  return res.todos.length;
+}
+
+// ─── To-do helpers (pure — unit-tested) ───────────────────────────────────────
+
+export interface FlatTodo {
+  id: string;
+  action: string;
+  state: string;
+  type: string;
+  project: string | null;
+  ref: string;
+  title: string;
+  targetState: string | null;
+  author: string | null;
+  createdAt: string;
+  url: string | null;
+  body: string;
+}
+
+const TODO_GID_PREFIX = "gid://gitlab/Todo/";
+
+/** "123" or "gid://gitlab/Todo/123" → the global ID; anything else throws. */
+export function toTodoGid(input: string): string {
+  const s = input.trim();
+  if (/^\d+$/.test(s)) return TODO_GID_PREFIX + s;
+  if (s.startsWith(TODO_GID_PREFIX) && /^\d+$/.test(s.slice(TODO_GID_PREFIX.length))) return s;
+  throw new Error(`Invalid to-do id "${input}". Expected a number like 123 (see: glw todos)`);
+}
+
+/** GitLab reference syntax: group/app#42 for issues, group/app!7 for MRs, &3 for epics. */
+export function todoRef(targetType: string, path: string | null, iid: string | undefined): string {
+  if (!iid) return path ?? "";
+  const sigil = targetType === "MERGEREQUEST" ? "!" : targetType === "EPIC" ? "&" : "#";
+  return `${path ?? ""}${sigil}${iid}`;
+}
+
+export function flattenTodo(t: TodoNode): FlatTodo {
+  const e = t.targetEntity;
+  const path = t.project?.fullPath ?? t.group?.fullPath ?? null;
+  const targetState = e?.workItemState ?? e?.issueState ?? e?.mrState ?? null;
+  return {
+    id: t.id.startsWith(TODO_GID_PREFIX) ? t.id.slice(TODO_GID_PREFIX.length) : t.id,
+    action: t.action,
+    state: t.state,
+    type: t.targetType,
+    project: path,
+    ref: todoRef(t.targetType, path, e?.iid),
+    title: e?.name ?? t.body,
+    targetState: targetState ? targetState.toLowerCase() : null,
+    author: t.author?.username ?? null,
+    createdAt: t.createdAt,
+    url: e?.webUrl ?? t.targetUrl,
+    body: t.body,
+  };
 }
 
 // ─── Relation input parsers (pure — unit-tested) ──────────────────────────────

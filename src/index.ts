@@ -33,6 +33,13 @@ import {
   resolveStatus,
   getWorkItemByIid,
   listWorkItems,
+  listMyWorkItems,
+  listTodos,
+  markTodoDone,
+  markAllTodosDone,
+  flattenTodo,
+  toTodoGid,
+  resolveProject,
   createWorkItem,
   updateWorkItem,
   createNote,
@@ -95,6 +102,8 @@ Commands:
   search                Search work items with filters
   create <file|dir>...  Create work items from files
   list                  List work items
+  mine                  Work items assigned to me in all projects
+  todos [done <id...>]  My GitLab To-Do List; mark items done
   view <iid>            Show a work item
   update [iid...] ...   Update one or more work items
   comment <iid> [text]  Add a comment to a work item
@@ -1293,6 +1302,238 @@ ${FIELDS_HELP}
   }
 }
 
+// mine
+async function cmdMine(args: string[]): Promise<void> {
+  const { values } = parseArgs({
+    args,
+    options: {
+      state: { type: "string" },
+      label: { type: "string", multiple: true },
+      limit: { type: "string" },
+      fields: { type: "string" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+    strict: false,
+  });
+
+  if (values["help"]) {
+    console.log(`
+glw mine [--state opened|closed|all] [--label <l>]... [--limit <n>] [--fields <csv>] [--json]
+
+Work items assigned to you in every project you can see (server-side filter,
+no default project needed). Grouped by project. Needs GitLab 17.10+.
+
+Flags:
+  --state <s>       opened | closed | all (default: opened)
+  --label <l>       Only items with this label; repeatable, all must match
+  --limit <n>       Max results (default: 100)
+  --fields <csv>    Flat output of chosen fields (see "Fields" below)
+  --json            JSON output
+
+${FIELDS_HELP}
+
+Examples:
+  glw mine
+  glw mine --label bug --fields project,iid,title,status,due
+`);
+    return;
+  }
+
+  const fields = parseFieldsFlag(values);
+  const config = loadConfig(undefined, false);
+  const items = await listMyWorkItems(config, {
+    state: (getFlag(values, "state") ?? "opened") as "opened" | "closed" | "all",
+    labels: getMultiFlag(values, "label"),
+    limit: values["limit"] ? parseInt(values["limit"] as string, 10) : 100,
+    includeDescription: fields?.includes("description"),
+  });
+
+  if (fields) {
+    printFields(items, fields, getBoolFlag(values, "json"));
+    return;
+  }
+
+  if (values["json"]) {
+    console.log(JSON.stringify(items));
+    return;
+  }
+
+  if (items.length === 0) {
+    console.log(dim("No work items assigned to you."));
+    return;
+  }
+
+  const byProject = new Map<string, WorkItemNode[]>();
+  for (const item of items) {
+    const path = item.namespace?.fullPath ?? "?";
+    byProject.set(path, [...(byProject.get(path) ?? []), item]);
+  }
+
+  for (const path of [...byProject.keys()].sort()) {
+    console.log(bold(cyan(path)));
+    for (const item of byProject.get(path)!) {
+      console.log(
+        "  " +
+          formatIssueLine({
+            iid: item.iid,
+            state: item.state,
+            title: item.title,
+            labels: getLabels(item).map((l) => l.title),
+          })
+      );
+    }
+  }
+}
+
+// todos
+async function cmdTodos(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      state: { type: "string" },
+      project: { type: "string" },
+      limit: { type: "string" },
+      all: { type: "boolean" },
+      yes: { type: "boolean" },
+      json: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+    allowPositionals: true,
+    strict: false,
+  });
+
+  if (values["help"]) {
+    console.log(`
+glw todos [--state pending|done|all] [--project <ref>] [--limit <n>] [--json]
+glw todos done <id...>
+glw todos done --all [--project <ref>] [--yes]
+
+Your GitLab To-Do List: what you were assigned, mentioned in, asked to review.
+Not tied to the default project; --project narrows to one project.
+
+Flags:
+  --state <s>       pending | done | all (default: pending)
+  --project <ref>   Only to-dos of this project
+  --limit <n>       Max results (default: 100)
+  --json            JSON output: flat objects { id, action, state, type,
+                    project, ref, title, targetState, author, createdAt, url, body }
+
+done:
+  <id...>           Mark these to-dos done (ids from the ID column)
+  --all             Mark every pending to-do done (with --project: of that project)
+  --yes             Skip confirmation for --all
+
+Examples:
+  glw todos
+  glw todos --project backend-api --json
+  glw todos done 1201 1202
+  glw todos done --all --yes
+`);
+    return;
+  }
+
+  const config = loadConfig(undefined, false);
+  const projectRef = getFlag(values, "project");
+  const projectId = projectRef
+    ? await resolveProject(config, await resolveProjectPath(config, projectRef))
+    : undefined;
+
+  if (positionals[0] === "done") {
+    await todosDone(config, positionals.slice(1), projectId, values);
+    return;
+  }
+  if (positionals.length > 0) die(`Unknown todos subcommand: "${positionals[0]}". Run: glw todos --help`);
+
+  const state = (getFlag(values, "state") ?? "pending") as "pending" | "done" | "all";
+  if (!["pending", "done", "all"].includes(state)) die(`--state must be pending, done or all`);
+
+  const todos = (
+    await listTodos(config, {
+      state,
+      projectId,
+      limit: values["limit"] ? parseInt(values["limit"] as string, 10) : 100,
+    })
+  ).map(flattenTodo);
+
+  if (values["json"]) {
+    console.log(JSON.stringify(todos));
+    return;
+  }
+
+  if (todos.length === 0) {
+    console.log(dim("To-Do List is empty."));
+    return;
+  }
+
+  const columns = ["id", "action", "target", "title", "author", "created"];
+  if (state !== "pending") columns.splice(2, 0, "state");
+  const rows = todos.map((t) => ({
+    id: t.id,
+    action: t.action,
+    state: t.state,
+    target: t.targetState && !isOpenState(t.targetState) ? `${t.ref} (${t.targetState})` : t.ref,
+    title: t.title,
+    author: t.author ? "@" + t.author : null,
+    created: t.createdAt.slice(0, 10),
+  }));
+  const [header, ...lines] = formatFieldTable(rows, columns);
+  console.log(bold(header!));
+  for (const line of lines) console.log(line);
+}
+
+async function todosDone(
+  config: Config,
+  ids: string[],
+  projectId: string | undefined,
+  values: Record<string, string | boolean | string[] | undefined>
+): Promise<void> {
+  const jsonOut = getBoolFlag(values, "json");
+
+  if (getBoolFlag(values, "all")) {
+    if (ids.length > 0) die("Pass either to-do ids or --all, not both");
+
+    const pending = (await listTodos(config, { state: "pending", projectId, limit: 1000 })).map(flattenTodo);
+    if (pending.length === 0) {
+      console.log(dim("No pending to-dos."));
+      return;
+    }
+    if (!values["yes"]) {
+      console.log(`\nFound ${yellow(String(pending.length))} pending to-do(s):\n`);
+      for (const t of pending) console.log(`  ${dim(t.id)} ${t.action} ${cyan(t.ref)} ${bold(t.title)}`);
+      console.log();
+      if (!(await confirm(`Mark ${pending.length} to-do(s) done?`))) {
+        console.log(dim("Aborted."));
+        return;
+      }
+    }
+
+    const count = await markAllTodosDone(config, projectId);
+    if (jsonOut) console.log(JSON.stringify({ done: count }));
+    else console.log(`${green("Marked done:")} ${count} to-do(s)`);
+    return;
+  }
+
+  if (ids.length === 0) die("Usage: glw todos done <id...> | glw todos done --all");
+
+  const gids = ids.map(toTodoGid);
+  const results: Array<{ id: string; error?: string }> = [];
+  for (const [i, gid] of gids.entries()) {
+    try {
+      await markTodoDone(config, gid);
+      results.push({ id: ids[i]! });
+      if (!jsonOut) console.log(`${green("Done")} ${cyan(ids[i]!)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      results.push({ id: ids[i]!, error: msg });
+      if (!jsonOut) console.error(red(`Failed ${ids[i]}: ${msg}`));
+    }
+  }
+
+  if (jsonOut) console.log(JSON.stringify(results));
+  if (results.some((r) => r.error)) process.exit(1);
+}
+
 // view
 async function cmdView(args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -2264,7 +2505,7 @@ Completes command names and project paths after "use" / "--project"
 
   const subcommands = [
     "init", "config", "global", "whoami", "projects", "use", "labels", "search", "create", "list",
-    "view", "update", "comment", "close", "reopen", "link", "parent", "estimate", "spend",
+    "mine", "todos", "view", "update", "comment", "close", "reopen", "link", "parent", "estimate", "spend",
     "completion",
     // aliases
     "i", "cfg", "s", "p", "co", "cr", "u", "v", "l", "ls", "ln",
@@ -2404,6 +2645,14 @@ async function main(): Promise<void> {
 
       case "list":
         await cmdList(rest);
+        break;
+
+      case "mine":
+        await cmdMine(rest);
+        break;
+
+      case "todos":
+        await cmdTodos(rest);
         break;
 
       case "view":

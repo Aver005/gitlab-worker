@@ -41,6 +41,8 @@ bun test        # все тесты зелёные, тесты не ходят �
 - `iids` в GraphQL-запросах — массив **строк**.
 - В create-input включаются только те виджеты, которые пользователь реально задал.
 - **Иерархия** (parent/child) задаётся через `hierarchyWidget` в `workItemUpdate`: `{ parentId }` (null очищает) на потомке или `{ childrenIds }` на родителе. **Связи** related/blocks/blocked-by — это **отдельные** мутации `workItemAddLinkedItems`/`workItemRemoveLinkedItems` (не виджет update), `linkType`-enum `RELATED`/`BLOCKS`/`BLOCKED_BY` описывает связь ОТ `id` К `workItemsIds`.
+- `mine` идёт через `currentUser.workItems(assigneeUsernames: [me])` (с 17.10, помечено как Experiment) — сервер фильтрует сам, по всем проектам. Резолвер требует хотя бы один фильтр, `assigneeUsernames` его закрывает.
+- `todos`: у `Todo` читай `targetEntity`, а не `target` — `target` устарел с 17.4 и может прийти `null`, хотя в схеме он ненулевой. `state` у `Issue`/`WorkItem`/`MergeRequest` — разные enum'ы, в одном выборе их нельзя смешать без алиасов (`issueState`/`workItemState`/`mrState`). `TodoStateEnum` — lowercase (`pending`/`done`).
 - Виджет `LINKED_ITEMS` на этом инстансе отдаёт только счётчики (`blocked`/`blockedByCount`/`blockingCount`), без списка связанных — не полагайся на список при чтении.
 
 ## Поведенческие инварианты CLI

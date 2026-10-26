@@ -25,6 +25,7 @@ const FIELDS: Record<string, (item: WorkItemNode) => FlatValue> = {
   due: (i) => getDates(i).dueDate,
   estimate: (i) => getTimeTracking(i).timeEstimate,
   spent: (i) => getTimeTracking(i).totalTimeSpent,
+  project: (i) => i.namespace?.fullPath ?? null,
   url: (i) => i.webUrl,
   description: (i) => getDescription(i),
 };

@@ -48,6 +48,13 @@ describe("flattenItem", () => {
     });
   });
 
+  it("takes project from the namespace, null when not fetched", () => {
+    expect(flattenItem({ ...item, namespace: { fullPath: "acme/app" } }, ["project"])).toEqual({
+      project: "acme/app",
+    });
+    expect(flattenItem(item, ["project"])).toEqual({ project: null });
+  });
+
   it("returns empty values when widgets are missing", () => {
     const bare = { ...item, widgets: [] } as WorkItemNode;
     expect(flattenItem(bare, ["status", "labels", "weight", "description"])).toEqual({

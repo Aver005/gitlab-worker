@@ -28,7 +28,12 @@ with `search`/`list --json`.
 | Request | Command |
 |---|---|
 | "покажи задачу 42", "show issue 42" | `glw view 42 --json` |
-| "мои открытые задачи", "my open issues" | `glw list --assignee @me --json` |
+| "мои открытые задачи" (в текущем проекте), "my open issues" | `glw list --assignee @me --json` |
+| "всё, что на мне", "мои задачи во всех проектах", "assigned to me everywhere" | `glw mine --fields project,iid,title,status,due --json` |
+| "мой To-Do", "список дел", "что от меня ждут", "my todos" | `glw todos --json` |
+| "упоминания меня", "где меня упомянули" | `glw todos --json` → filter `action` in `mentioned`, `directly_addressed` |
+| "отметь to-do 1201 сделанным", "mark todo done" | `glw todos done 1201` |
+| "очисти To-Do", "mark all todos done" | preview `glw todos --json`, then `glw todos done --all --yes` |
 | "все закрытые задачи", "closed issues" | `glw list --state closed --json` |
 | "найди задачи про авторизацию", "search auth" | `glw search "authentication" --json` |
 | "задачи с 'refactor:' в названии", "titled refactor:" | `glw search --name "refactor:" --json` |

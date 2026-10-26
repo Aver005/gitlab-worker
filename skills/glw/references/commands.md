@@ -185,13 +185,77 @@ glw list --state closed --limit 100
 glw list --fields iid,title,labels,status,weight,estimate,spent
 ```
 
-**Flat fields** (`--fields <csv>` on `search`, `list`, `view`): `iid`, `id`,
+**Flat fields** (`--fields <csv>` on `search`, `list`, `mine`, `view`): `iid`, `id`,
 `title`, `state` (`open`/`closed`), `status`, `labels`, `assignees`, `weight`,
-`start`, `due`, `estimate`, `spent`, `url`, `description`. Without `--json`:
+`start`, `due`, `estimate`, `spent`, `project` (full path), `url`,
+`description`. Without `--json`:
 a padded table (`view`: key/value lines), durations as `1h 30m`, empty values
 as `-`. With `--json`: flat objects (`view`: one object), `estimate`/`spent`
 in **seconds**, `labels`/`assignees` as arrays of titles/usernames, missing
 values `null`. Unknown field names fail before any request.
+
+---
+
+## mine — `glw mine [flags]`
+
+Work items assigned to the current user in **every** project they can see.
+Server-side filter (`currentUser.workItems`, GitLab 17.10+), no default project
+needed, `--project` is ignored. Human output is grouped by project; JSON is the
+same node array as `list` (with `namespace.fullPath`).
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--state opened\|closed\|all` | opened | state filter |
+| `--label <l>` | — | repeatable; item must have all of them (server-side) |
+| `--limit <n>` | 100 | max results (paged by 100) |
+| `--fields <csv>` | — | flat output; add `project`, iids repeat across projects |
+| `--json` | — | JSON array output |
+
+```bash
+glw mine
+glw mine --label bug --label backend
+glw mine --fields project,iid,title,status,due --json
+```
+
+To act on a result, pass its project: `glw update 42 --project acme/app ...`.
+
+---
+
+## todos — `glw todos [done] [flags]`
+
+The user's GitLab To-Do List (assigned, mentioned, review requested, …), across
+all projects. `--project <ref>` narrows to one project.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--state pending\|done\|all` | pending | to-do state |
+| `--project <ref>` | — | only to-dos of this project |
+| `--limit <n>` | 100 | max results |
+| `--json` | — | flat objects (below) |
+
+JSON: `[{ id, action, state, type, project, ref, title, targetState, author,
+createdAt, url, body }]`. `id` is the to-do id (a number as string, not an
+iid). `type` is `TodoTargetEnum` (`WORKITEM`, `ISSUE`, `MERGEREQUEST`, `EPIC`,
+…); `ref` is `acme/app#42`, `acme/app!7` (MR) or `acme&3` (epic);
+`targetState` is the target's own state lowercased (`open`, `opened`,
+`closed`, `merged`) or `null`; `action` is e.g. `assigned`, `mentioned`,
+`directly_addressed`, `review_requested`, `build_failed`.
+
+Mark done:
+
+- `glw todos done <id...>` — explicit ids, no prompt; continues past per-id
+  failures, exits non-zero if any failed. `--json` → `[{ id, error? }]`.
+- `glw todos done --all [--project <ref>]` — every pending to-do (of the
+  project). Lists them and asks for confirmation; non-TTY auto-declines, so
+  agents pass `--yes` after previewing with `glw todos --json`. `--json` →
+  `{ done: <count> }`.
+
+```bash
+glw todos
+glw todos --state all --project backend-api --json
+glw todos done 1201 1202
+glw todos done --all --yes
+```
 
 ---
 
